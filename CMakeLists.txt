@@ -66,6 +66,7 @@ add_executable(nori
   include/nori/warp.h
 
   # Source code files
+  src/normals.cpp
   src/bitmap.cpp
   src/block.cpp
   src/accel.cpp

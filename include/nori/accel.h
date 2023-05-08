@@ -7,6 +7,7 @@
 #pragma once
 
 #include <nori/mesh.h>
+#include<queue>
 
 NORI_NAMESPACE_BEGIN
 
@@ -17,6 +18,31 @@ NORI_NAMESPACE_BEGIN
  * through the geometry.
  */
 class Accel {
+
+private:
+    static constexpr int32_t MaxPrimitivesPerNode = 4;
+    const bool Use_Octree = true;
+
+    struct OctreeNode {
+        BoundingBox3f bbox;
+        std::vector<uint32_t> primitives_idx;
+        int32_t children;
+    };
+    
+    std::vector<OctreeNode> m_octree;
+    
+    bool Octree_rayIntersect(const Ray3f &ray_, Intersection &its,uint32_t& primitive_idx, bool shadowRay, const size_t node_idx = 0) const;
+    
+    size_t CreateOctNode();
+    size_t Create8OctNodes();
+
+    size_t splitNode(size_t node_idx);
+
+    size_t Rootadd(size_t primitive_idx, size_t node_idx);
+
+    void adjust_octree();
+
+
 public:
     /**
      * \brief Register a triangle mesh for inclusion in the acceleration
