@@ -1,5 +1,7 @@
 scenes/pa*/*.png
 scenes/pa*/*.exr
+*.exr
+*.png
 
 /build
 .DS_Store
