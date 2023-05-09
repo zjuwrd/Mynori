@@ -20,7 +20,9 @@ NORI_NAMESPACE_BEGIN
 class Accel {
 
 private:
-    static constexpr int32_t MaxPrimitivesPerNode = 4;
+    static constexpr int32_t MaxPrimitivesPerNode = 20;
+    static constexpr int32_t MaxOctreeDepth = 8;
+
     const bool Use_Octree = true;
 
     struct OctreeNode {
@@ -31,7 +33,7 @@ private:
     
     std::vector<OctreeNode> m_octree;
     
-    bool Octree_rayIntersect(const Ray3f &ray_, Intersection &its,uint32_t& primitive_idx, bool shadowRay, const size_t node_idx = 0) const;
+    bool Octree_rayIntersect(Ray3f &ray_, Intersection &its,uint32_t& primitive_idx, bool shadowRay, const size_t node_idx = 0) const;
     
     size_t CreateOctNode();
     size_t Create8OctNodes();

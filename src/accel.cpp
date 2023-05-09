@@ -21,14 +21,21 @@ void Accel::build() {
     /* Nothing to do here for now */
     if(Use_Octree)
     {
+        std::cout<<"building Octree ..."<<std::endl;
         m_octree.clear();
+        m_octree.reserve(8*8*8*8*8);
+
         const uint32_t Primitive_count = m_mesh->getTriangleCount();
         size_t root_idx = CreateOctNode();
+
         for(uint32_t i=0;i<Primitive_count;++i)
         {
             Rootadd(i,root_idx);
         }
+        std::cout<<"Root created."<<std::endl;
         adjust_octree();
+        std::cout<<"Octree built."<<std::endl;
+
     }
 }
 
@@ -41,8 +48,9 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
     //Use Octree for acceleration
     if(Use_Octree)
     {
-        foundIntersection = Octree_rayIntersect(ray_,its,f,shadowRay);
+        foundIntersection = Octree_rayIntersect(ray,its,f,shadowRay);
         if(shadowRay && foundIntersection)return true;
+        // if(foundIntersection)std::cout<<"foundIntersect"<<std::endl;
     }
     else
     {
@@ -64,6 +72,7 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
     }
     
     if (foundIntersection) {
+        // std::cout<<"in"<<std::endl;
         /* At this point, we now know that there is an intersection,
            and we know the triangle index of the closest such intersection.
 
@@ -120,7 +129,7 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
 }
 
 
-bool Accel::Octree_rayIntersect(const Ray3f &ray_, Intersection &its,uint32_t& primitive_idx_o, bool shadowRay, const size_t node_idx) const
+bool Accel::Octree_rayIntersect(Ray3f &ray_, Intersection &its,uint32_t& primitive_idx_o, bool shadowRay, const size_t node_idx) const
 {
     if(m_octree.empty())
     {
@@ -129,7 +138,7 @@ bool Accel::Octree_rayIntersect(const Ray3f &ray_, Intersection &its,uint32_t& p
     const auto& node = m_octree[node_idx];
 
 
-    Ray3f ray(ray_);
+    Ray3f& ray=ray_;
     bool foundIntersection = false;
     [[maybe_unused]]
     float farT=std::numeric_limits<float>::infinity();
@@ -145,6 +154,7 @@ bool Accel::Octree_rayIntersect(const Ray3f &ray_, Intersection &its,uint32_t& p
                 float u, v, t;
                 if (m_mesh->rayIntersect(primitive_idx,ray,u,v,t))
                 {
+
                     if (shadowRay)
                         return true;
                     ray.maxt = its.t = t ;
@@ -163,6 +173,7 @@ bool Accel::Octree_rayIntersect(const Ray3f &ray_, Intersection &its,uint32_t& p
                 {
                     if(Octree_rayIntersect(ray,its,primitive_idx_o,shadowRay,node.children+i))
                     {
+                        foundIntersection = true;
                         if(shadowRay)return true;
                     }
                 }
@@ -170,6 +181,7 @@ bool Accel::Octree_rayIntersect(const Ray3f &ray_, Intersection &its,uint32_t& p
         }
     }
     
+    return foundIntersection;
 
 }
     
@@ -193,96 +205,53 @@ bool Accel::Octree_rayIntersect(const Ray3f &ray_, Intersection &its,uint32_t& p
 
     size_t Accel::splitNode(size_t node_idx)
     {
-        auto& node = m_octree[node_idx];
-        node.children = Create8OctNodes();
+        // auto& node = m_octree[node_idx];
+        size_t children_idx = Create8OctNodes();
+        m_octree[node_idx].children = children_idx;
 
-        auto center = node.bbox.getCenter();
-        auto min = node.bbox.min;
-        auto max = node.bbox.max;
+        auto center = m_octree[node_idx].bbox.getCenter();
+        auto min = m_octree[node_idx].bbox.min;
+        auto max = m_octree[node_idx].bbox.max;
         
         for(int i=0;i<8;++i)
         {
-            auto& children = m_octree[node.children+i];
-            children.bbox = node.bbox;
-            
-            switch (i)
-            {
-            
-            case 0:
-                children.bbox.max = center;
-                break;
-            case 1:
-                children.bbox.max.x() = center.x();
-                children.bbox.max.y() = center.y();
-                children.bbox.min.z() = center.z();
-                break;
-            case 2:
-                children.bbox.max.x() = center.x();
-                children.bbox.min.y() = center.y();
-                children.bbox.max.z() = center.z();
-                break;
-            case 3:
-                children.bbox.max.x() = center.x();
-                children.bbox.min.y() = center.y();
-                children.bbox.min.z() = center.z();
-                break;
-            case 4:
-                children.bbox.min.x() = center.x();
-                children.bbox.max.y() = center.y();
-                children.bbox.max.z() = center.z();
-                break;
-            case 5:
-                children.bbox.min.x() = center.x();
-                children.bbox.max.y() = center.y();
-                children.bbox.min.z() = center.z();
-                break;
-            case 6:
-                children.bbox.min.x() = center.x();
-                children.bbox.min.y() = center.y();
-                children.bbox.max.z() = center.z();
-                break;
-            case 7:
-                children.bbox.min.x() = center.x();
-                children.bbox.min.y() = center.y();
-                children.bbox.min.z() = center.z();
-                break;
-            default:
-                break;
-            }
-            children.primitives_idx.reserve(node.primitives_idx.size());
+            auto& children = m_octree[m_octree[node_idx].children+i];
+            children.bbox = m_octree[node_idx].bbox;
+            const auto corner = children.bbox.getCorner(i);
+            children.bbox.min[0] = std::min(corner[0], center[0]);
+            children.bbox.min[1] = std::min(corner[1], center[1]);
+            children.bbox.min[2] = std::min(corner[2], center[2]);
+            children.bbox.max[0] = std::max(corner[0], center[0]);
+            children.bbox.max[1] = std::max(corner[1], center[1]);
+            children.bbox.max[2] = std::max(corner[2], center[2]); 
+
+
+            children.primitives_idx.reserve(m_octree[node_idx].primitives_idx.size());
             min = children.bbox.min;
             max = children.bbox.max;
             
+            [[maybe_unused]]
             const auto& m_F = m_mesh->getIndices();
+            [[maybe_unused]]
             const auto& m_V = m_mesh->getVertexPositions();
 
-            for(auto primitive_idx : node.primitives_idx)
+            for(auto primitive_idx : m_octree[node_idx].primitives_idx)
             {
-                uint32_t i0 = m_F(0, primitive_idx), i1 = m_F(1, primitive_idx), i2 = m_F(2, primitive_idx);
-                const Point3f p0 = m_V.col(i0), p1 = m_V.col(i1), p2 = m_V.col(i2);
-                auto edge1 = p1 - p0;
-                auto edge2 = p2 - p0;
-                auto normal = edge1.cross(edge2);
-                
-                bool above= (Point3f(min[0],min[1],min[2]) - p0).dot(normal) > 0.f||(Point3f(max[0],min[1],min[2]) - p0).dot(normal) > 0.f||
-                            (Point3f(min[0],max[1],min[2]) - p0).dot(normal) > 0.f||(Point3f(max[0],max[1],min[2]) - p0).dot(normal) > 0.f||
-                            (Point3f(min[0],min[1],max[2]) - p0).dot(normal) > 0.f||(Point3f(max[0],min[1],max[2]) - p0).dot(normal) > 0.f||
-                            (Point3f(min[0],max[1],max[2]) - p0).dot(normal) > 0.f||(Point3f(max[0],max[1],max[2]) - p0).dot(normal) > 0.f ;
-
-                bool below = (Point3f(min[0],min[1],min[2]) - p0).dot(normal) <= 0.f||(Point3f(max[0],min[1],min[2]) - p0).dot(normal) <= 0.f||
-                            (Point3f(min[0],max[1],min[2]) - p0).dot(normal) <= 0.f||(Point3f(max[0],max[1],min[2]) - p0).dot(normal) <= 0.f||
-                            (Point3f(min[0],min[1],max[2]) - p0).dot(normal) <= 0.f||(Point3f(max[0],min[1],max[2]) - p0).dot(normal) <= 0.f||
-                            (Point3f(min[0],max[1],max[2]) - p0).dot(normal) <= 0.f||(Point3f(max[0],max[1],max[2]) - p0).dot(normal) <= 0.f ;
-
-                if(above&&below)
+                auto prim_bbox = m_mesh->getBoundingBox(primitive_idx);
+                if(prim_bbox.overlaps(children.bbox))
                 {
                     children.primitives_idx.push_back(primitive_idx);
                 }
+                else{
+                    continue;
+                }
+
+
             }
         }
 
-        node.primitives_idx.clear();
-        return node.children;
+        m_octree[node_idx].primitives_idx.clear();
+        return m_octree[node_idx].children;
     }
 
     size_t Accel::Rootadd(size_t primitive_idx, size_t node_idx)
@@ -290,6 +259,8 @@ bool Accel::Octree_rayIntersect(const Ray3f &ray_, Intersection &its,uint32_t& p
         auto& node = m_octree[0];
         node.primitives_idx.push_back(primitive_idx);
         node.bbox.expandBy(m_mesh->getBoundingBox(primitive_idx));
+        return 0;
+
     }
 
     void Accel::adjust_octree()
@@ -297,18 +268,31 @@ bool Accel::Octree_rayIntersect(const Ray3f &ray_, Intersection &its,uint32_t& p
         std::queue<size_t> adjustQue;
         if(m_octree.empty()||m_octree[0].primitives_idx.size()<=MaxPrimitivesPerNode)return;
         adjustQue.push(0);
+        size_t pivot = 0;
+        int32_t depth = 0;
         while(!adjustQue.empty())
         {
             const size_t node_idx = adjustQue.front();
             adjustQue.pop();
-            auto& node = m_octree[node_idx];
-            if(node.primitives_idx.size()<=MaxPrimitivesPerNode)
+            
+    
+            if(m_octree[node_idx].primitives_idx.size()<=MaxPrimitivesPerNode||depth>MaxOctreeDepth)
             {
                 continue;
             }
-
+            
             const size_t children_idx = splitNode(node_idx);
-            for(size_t i=0;i<8;++i){adjustQue.push(children_idx+i);}
+            for(size_t i=0;i<8;++i){
+                
+                adjustQue.push(children_idx+i);
+            }
+            
+            if(pivot <= node_idx)
+            {
+                pivot = children_idx;
+                depth++;
+            }
+        
         }
     }
 
