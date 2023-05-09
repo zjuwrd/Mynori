@@ -1,3 +1,6 @@
+scenes/pa*/*.png
+scenes/pa*/*.exr
+
 /build
 .DS_Store
 /nori
