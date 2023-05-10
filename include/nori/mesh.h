@@ -65,6 +65,11 @@ public:
     /// Sample point on the mesh uniformly
     std::pair<Point3f,Normal3f> UniformSamplePoint(Sampler* sampler, float& pdf) const;
 
+    virtual void samplePosition(const Point2f& sample, Point3f& position, Normal3f& normal, const float optional_u)const;
+
+    inline virtual float totalArea()const{return m_dpdf->getSum();} 
+    inline virtual float pdf()const{return m_dpdf->getNormalization();}
+
     /// Release all memory
     virtual ~Mesh();
 

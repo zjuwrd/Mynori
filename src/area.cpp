@@ -1,70 +1,77 @@
-#include<nori/emitter.h>
-#include<nori/scene.h>
+#include <nori/emitter.h>
+#include <nori/warp.h>
+#include <nori/mesh.h>
 
 NORI_NAMESPACE_BEGIN
 
+class AreaEmitter : public Emitter {
+public:
+    AreaEmitter(const PropertyList &props) :m_radiance(props.getColor("radiance")){
+		m_type = EmitterType::EMITTER_AREA;
+    }
 
+    virtual std::string toString() const {
+        return tfm::format(
+                "AreaLight[\n"
+                "  radiance = %s,\n"
+                "]",
+                m_radiance.toString());
+    }
 
-class AreaLight :public Emitter
-{
-    public:
-        AreaLight(const PropertyList &props)
-        :radiance(props.getColor("radiance",Color3f(1.0f))) {}
+    virtual Color3f getRadiance() const {return m_radiance;}
+
+	virtual Color3f eval(const EmitterQueryRecord & lRec) const {
+        assert(m_mesh);
         
-        /**
-         * \brief Sample the emitter for a point on its surface
-         * and return the incident radiance along the associated ray
-         * */
+		if (lRec.n.dot(lRec.wi) < 0.0f)
+			return m_radiance;
+		else return 0.0f;
+    }
 
-        virtual Color3f sample(const Mesh* mesh, LightQueryRecord& record, Sampler* sampler, float& pdf)const
-        {
-            float light_pos_pdf=0.f;
-            const auto result = mesh->UniformSamplePoint(sampler, light_pos_pdf);
-            record.Light_Sample_point = result.first;
-            record.AreaLight_normal = result.second;
-            
-            if (light_pos_pdf > 0.0f && !std::isnan(light_pos_pdf) && !std::isinf(light_pos_pdf)) {
-                pdf = light_pos_pdf;
-                return eval(mesh,record);            
-            }
-
-            pdf = 1.f;
-            return 0.f;
-
-        }
-        virtual float pdf(const Mesh* mesh, LightQueryRecord& record)const
-        {
+    virtual Color3f sample(EmitterQueryRecord & lRec, Sampler* sampler) const {
+        //m_mesh shouldn't be null
+        assert(m_mesh);
         
-            float cosTheta = record.AreaLight_normal.dot(record.Primitive_point-record.Light_Sample_point);
-            //light to point
-            if (cosTheta > 0.0f) {
-                return mesh->getDpdf()->getNormalization();
-            }
+		m_mesh->samplePosition(sampler->next2D(), lRec.p, lRec.n, sampler->next1D());
 
-            return 0.0f;
-        
-        }
+		// fill in messages.
+		lRec.wi = (lRec.p - lRec.ref).normalized();
+		lRec.pdf = pdf(lRec);
+        lRec.emitter = this;
+		lRec.dist = (lRec.p - lRec.ref).norm();
+		
+		if(!std::isnan(lRec.pdf) && lRec.pdf >= 0.0f && std::abs(lRec.pdf) != std::numeric_limits<float>::infinity()) 
+            return eval(lRec) / lRec.pdf;
+		else return 0.0f;
+    }
 
-        virtual Color3f getRadiance()const{return radiance;}
-        
-        virtual Color3f eval(const Mesh* mesh, const LightQueryRecord& record)const
-        {
-            return record.AreaLight_normal.dot(record.Primitive_point - record.Light_Sample_point) >0.f?radiance:Color3f(0.f,0.f,0.f);
+    //for consistency, we use solid angle measure and pre-multiply the cosThetaPrime term
+	virtual float pdf(const EmitterQueryRecord &lRec) const {
+        assert(m_mesh);
 
-        }
+		float cosThetaPrime = std::abs(lRec.n.dot(-lRec.wi));
 
-        /**
-         * \brief Return the type of object (i.e. Mesh/Emitter/etc.) 
-         * provided by this instance
-         * */
-        std::string toString() const {
-            return "AreaLight[]";
-        }
-    private:
-        Color3f radiance;
+        //tranform pdf from area measure to solid angle measure    
+		float pdf_ = m_mesh->pdf() * std::pow(lRec.dist,2) / cosThetaPrime;
+		//erase irrational values
+        if (isnan(pdf_) || fabsf(pdf_) == INFINITY)
+			return 0.0f;
+		return pdf_;
+    }
+
+    void setParent(NoriObject *parent)
+	{
+		auto type = parent->getClassType();
+		if (type == EMesh)
+			m_mesh = static_cast<Mesh*>(parent);
+	}
+
+
+	
+
+protected:
+    Color3f m_radiance;
 };
 
-
-NORI_REGISTER_CLASS(AreaLight, "area");
-
+NORI_REGISTER_CLASS(AreaEmitter, "area")
 NORI_NAMESPACE_END

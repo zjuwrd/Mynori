@@ -43,7 +43,27 @@ std::pair<Point3f,Normal3f> Mesh::UniformSamplePoint(Sampler* sampler, float& pd
     return {pos,normal};
 }
 
+void Mesh::samplePosition(const Point2f& sample, Point3f& position, Normal3f& normal, const float ratio)const
+{
+    float s = ratio;
+    const size_t f = m_dpdf->sample(s);
 
+    const Point2f psi = sample;
+    const Point2f barycentric(1.f-std::sqrt(1.f-psi[0]),psi[1]*std::sqrt(1.f-psi[0]));
+
+    uint32_t vi0 = m_F(0,f), vi1=m_F(1,f),vi2=m_F(2,f);
+    const Point3f v0 = m_V.col(vi0), v1=m_V.col(vi1), v2=m_V.col(vi2);
+    const Vector3f e1 = v1-v0;
+    const Vector3f e2 = v2-v0;
+
+    position = v0+e1*barycentric[0]+e2*barycentric[1];
+
+    normal = (m_V.cols() == m_N.cols())?(m_N.col(vi0)*(1.f-barycentric[0]-barycentric[1]) + m_N.col(vi1)*barycentric[1]+m_N.col(vi2)*barycentric[2]):
+                                                        e1.cross(e2).normalized( );
+
+
+    
+}
 
 void Mesh::activate() {
     if (!m_bsdf) {
@@ -56,6 +76,8 @@ void Mesh::activate() {
         float area = surfaceArea(f);
         m_dpdf->append(area);
     }
+
+
     m_dpdf->normalize();
     
 }

@@ -24,8 +24,8 @@ class PathMats : public Integrator {
         {
             if(its.mesh->isEmitter())
             {
-                LightQueryRecord record(ray.o,its.p,its.shFrame.n);
-                L+=throughput*its.mesh->getEmitter()->eval(its.mesh,record);
+                EmitterQueryRecord record(ray.o,its.p,its.shFrame.n);
+                L+=throughput*its.mesh->getEmitter()->eval(record);
             }
 
             //Russian Roullete

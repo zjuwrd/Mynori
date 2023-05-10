@@ -19,6 +19,54 @@ NORI_NAMESPACE_BEGIN
  */
 class Scene : public NoriObject {
 public:
+    ///return the number of emissive meshes
+    size_t getEmissiveMeshesCount() const
+    {
+        size_t count = 0;
+        for (auto mesh : m_meshes)
+        {
+            if (mesh->isEmitter())
+                count++;
+        }
+        return count;
+    }
+
+    /// @brief return the idxth emissive mesh
+    /// @param idx index of the emissive mesh
+    /// @return idxth emissive mesh if it exists, else nullptr
+    const Mesh* getLight(size_t idx)const
+    {
+        int count = 0;
+        for (auto mesh : m_meshes)
+        {
+            if (mesh->isEmitter())
+            {
+                if (count == idx)
+                    return mesh;
+                count++;
+            }
+        }
+        return nullptr;
+    }
+
+
+
+    /// @brief Uniformly sample a light source
+    /// @param point Uniform random number in [0,1]
+    /// @param pdf possibility for the light source
+    /// @return Light source sampled if exists, else nullptr
+    const Mesh* SampleLight(const float point, float& pdf)const
+    {
+        size_t count = getEmissiveMeshesCount();
+        if (count == 0)
+            return nullptr;
+        size_t idx = std::min((size_t)(point * count), count - 1);
+        pdf = 1.0f / count;
+        return getLight(idx);
+    }
+
+
+
     /// Construct a new scene object
     Scene(const PropertyList &);
 

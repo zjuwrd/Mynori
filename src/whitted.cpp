@@ -17,8 +17,8 @@ class WhittedIntegrator : public Integrator {
             Color3f Le(0.0f),Li(0.0f);
             if(its.mesh->isEmitter())
             {
-                LightQueryRecord record(its.p,ray.o,its.shFrame.n);
-                Le=its.mesh->getEmitter()->eval(its.mesh,record);
+                EmitterQueryRecord record(ray.o,its.p,its.shFrame.n);
+                Le=its.mesh->getEmitter()->eval(record);
             }
             
             if(its.mesh->getBSDF()->isDiffuse()) // diffuse surface
@@ -44,20 +44,20 @@ class WhittedIntegrator : public Integrator {
                         if(mesh && mesh->isEmitter())
                         {
                             
-                            LightQueryRecord record(its.p,ray.o,its.shFrame.n);
+                            EmitterQueryRecord record(its.p);
+                            
                             float pdf=0.f;
-                            Color3f radiance=mesh->getEmitter()->sample(mesh,record,sampler,pdf);
+                            Color3f radiance=mesh->getEmitter()->sample(record,sampler);
+                            pdf = record.pdf;
                             if(pdf>0.f)
                             {
-                                Vector3f wi = record.Light_Sample_point - its.p;
-                                Ray3f shadow_ray(its.p, wi.normalized(), Epsilon, wi.norm() - Epsilon);
-                                wi.normalize();
+                                Vector3f wi = record.wi;
+                                Ray3f shadow_ray(its.p, wi, Epsilon, record.dist - Epsilon);
                                 Intersection its_shadow;
                                 if (!scene->rayIntersect(shadow_ray, its_shadow))
                                 {
                                     BSDFQueryRecord bRec(its.shFrame.toLocal(wi),its.shFrame.toLocal(-ray.d),  EMeasure::ESolidAngle);
-                                    Li += radiance * its.mesh->getBSDF()->eval(bRec) * std::abs(its.shFrame.n.dot(wi)) * std::abs(record.AreaLight_normal.dot(-wi))
-                                    /(record.Light_Sample_point - its.p).squaredNorm()/pdf;
+                                    Li += radiance * its.mesh->getBSDF()->eval(bRec) * std::abs(its.shFrame.n.dot(wi));
                                 }
                             }
                             

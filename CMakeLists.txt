@@ -67,6 +67,7 @@ add_executable(nori
   include/nori/warp.h
 
   # Source code files
+  src/path_mis.cpp
   src/path_ems.cpp
   src/path_mats.cpp
   src/whitted.cpp
