@@ -40,6 +40,7 @@ include_directories(
 add_executable(nori
 
   # Header files
+  include/nori/bvh.h
   include/nori/bbox.h
   include/nori/bitmap.h
   include/nori/block.h
@@ -66,6 +67,11 @@ add_executable(nori
   include/nori/warp.h
 
   # Source code files
+  src/whitted.cpp
+  src/area.cpp
+  src/bvh.cpp
+  src/ao.cpp
+  src/simple.cpp
   src/normals.cpp
   src/bitmap.cpp
   src/block.cpp

@@ -8,6 +8,7 @@
 
 #include <nori/mesh.h>
 #include<queue>
+#include<nori/bvh.h>
 
 NORI_NAMESPACE_BEGIN
 
@@ -24,6 +25,7 @@ private:
     static constexpr int32_t MaxOctreeDepth = 8;
 
     const bool Use_Octree = true;
+    const bool Use_BVH = true;
 
     struct OctreeNode {
         BoundingBox3f bbox;
@@ -33,17 +35,14 @@ private:
     
     std::vector<OctreeNode> m_octree;
     
-    bool Octree_rayIntersect(Ray3f &ray_, Intersection &its,uint32_t& primitive_idx, bool shadowRay, const size_t node_idx = 0) const;
-    
+    bool Octree_rayIntersect(Ray3f &ray_, Intersection &its, bool shadowRay, const size_t node_idx = 0) const;
     size_t CreateOctNode();
     size_t Create8OctNodes();
-
     size_t splitNode(size_t node_idx);
-
     size_t Rootadd(size_t primitive_idx, size_t node_idx);
-
     void adjust_octree();
 
+    BVH bvh;
 
 public:
     /**
@@ -83,6 +82,7 @@ public:
 
 private:
     Mesh         *m_mesh = nullptr; ///< Mesh (only a single one for now)
+    std::vector<Mesh*> m_meshes;
     BoundingBox3f m_bbox;           ///< Bounding box of the entire scene
 };
 

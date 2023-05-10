@@ -20,12 +20,44 @@ Mesh::~Mesh() {
     delete m_emitter;
 }
 
+std::pair<Point3f,Normal3f> Mesh::UniformSamplePoint(Sampler* sampler, float& pdf) const
+{
+    float s = sampler->next1D();
+    const size_t f = m_dpdf->sample(s);
+    pdf = 1.f/m_dpdf->getSum();
+
+
+    const Point2f psi = sampler->next2D();
+    const Point2f barycentric(1.f-std::sqrt(1.f-psi[0]),psi[1]*std::sqrt(1.f-psi[0]));
+
+    uint32_t vi0 = m_F(0,f), vi1=m_F(1,f),vi2=m_F(2,f);
+    const Point3f v0 = m_V.col(vi0), v1=m_V.col(vi1), v2=m_V.col(vi2);
+    const Vector3f e1 = v1-v0;
+    const Vector3f e2 = v2-v0;
+    const Point3f pos = v0+e1*barycentric[0]+e2*barycentric[1];
+    
+    const Point3f normal = (m_V.cols() == m_N.cols())?(m_N.col(vi0)*(1.f-barycentric[0]-barycentric[1]) + m_N.col(vi1)*barycentric[1]+m_N.col(vi2)*barycentric[2]):
+                                                        e1.cross(e2).normalized( );
+
+
+    return {pos,normal};
+}
+
+
+
 void Mesh::activate() {
     if (!m_bsdf) {
         /* If no material was assigned, instantiate a diffuse BRDF */
         m_bsdf = static_cast<BSDF *>(
             NoriObjectFactory::createInstance("diffuse", PropertyList()));
     }
+    //Precomputing discrete pdf for sampling
+    for(uint32_t f =0;f<m_F.cols();f++){
+        float area = surfaceArea(f);
+        m_dpdf->append(area);
+    }
+    m_dpdf->normalize();
+    
 }
 
 float Mesh::surfaceArea(uint32_t index) const {

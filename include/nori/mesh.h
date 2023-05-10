@@ -9,7 +9,8 @@
 #include <nori/object.h>
 #include <nori/frame.h>
 #include <nori/bbox.h>
-
+#include<nori/dpdf.h>
+#include<memory>
 NORI_NAMESPACE_BEGIN
 
 /**
@@ -61,6 +62,9 @@ struct Intersection {
  */
 class Mesh : public NoriObject {
 public:
+    /// Sample point on the mesh uniformly
+    std::pair<Point3f,Normal3f> UniformSamplePoint(Sampler* sampler, float& pdf) const;
+
     /// Release all memory
     virtual ~Mesh();
 
@@ -136,6 +140,7 @@ public:
     /// Return a pointer to the BSDF associated with this mesh
     const BSDF *getBSDF() const { return m_bsdf; }
 
+    const std::shared_ptr<DiscretePDF> getDpdf()const{return m_dpdf;}
     /// Register a child object (e.g. a BSDF) with the mesh
     virtual void addChild(NoriObject *child);
 
@@ -164,6 +169,8 @@ protected:
     BSDF         *m_bsdf = nullptr;      ///< BSDF of the surface
     Emitter    *m_emitter = nullptr;     ///< Associated emitter, if any
     BoundingBox3f m_bbox;                ///< Bounding box of the mesh
+
+    std::shared_ptr<DiscretePDF> m_dpdf = std::make_shared<DiscretePDF>();                  ///< Discrete PDF for sampling triangles
 };
 
 NORI_NAMESPACE_END
