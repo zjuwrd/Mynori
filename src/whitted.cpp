@@ -21,52 +21,71 @@ class WhittedIntegrator : public Integrator {
                 Le=its.mesh->getEmitter()->eval(its.mesh,record);
             }
             
-            auto& meshes = scene->getMeshes();
-            size_t Emmitter_count = 0;
-            for(const auto& mesh:meshes)
-            {
-                if(mesh && mesh->isEmitter())
-                {
-                    Emmitter_count++;
-                }
-            }
-
-            
-            if(Emmitter_count<=0)
-            {
-                return Le;
-            }
-            else
-            {
-                for(auto mesh:meshes)
+            if(its.mesh->getBSDF()->isDiffuse()) // diffuse surface
+            { 
+                auto& meshes = scene->getMeshes();
+                size_t Emmitter_count = 0;
+                for(const auto& mesh:meshes)
                 {
                     if(mesh && mesh->isEmitter())
                     {
-                        
-                        LightQueryRecord record(its.p,ray.o,its.shFrame.n);
-                        float pdf=0.f;
-                        Color3f radiance=mesh->getEmitter()->sample(mesh,record,sampler,pdf);
-                        if(pdf>0.f)
-                        {
-                            Vector3f wi = record.Light_Sample_point - its.p;
-                            Ray3f shadow_ray(its.p, wi.normalized(), Epsilon, wi.norm() - Epsilon);
-                            wi.normalize();
-                            Intersection its_shadow;
-                            if (!scene->rayIntersect(shadow_ray, its_shadow))
-                            {
-                                BSDFQueryRecord bRec(its.shFrame.toLocal(wi),its.shFrame.toLocal(-ray.d),  EMeasure::ESolidAngle);
-                                Li += radiance * its.mesh->getBSDF()->eval(bRec) * std::abs(its.shFrame.n.dot(wi)) * std::abs(record.AreaLight_normal.dot(-wi))
-                                /(record.Light_Sample_point - its.p).squaredNorm()/pdf;
-                            }
-                        }
-                        
+                        Emmitter_count++;
                     }
                 }
                 
+                if(Emmitter_count<=0)
+                {
+                    return Le;
+                }
+                else
+                {
+                    for(auto mesh:meshes)
+                    {
+                        if(mesh && mesh->isEmitter())
+                        {
+                            
+                            LightQueryRecord record(its.p,ray.o,its.shFrame.n);
+                            float pdf=0.f;
+                            Color3f radiance=mesh->getEmitter()->sample(mesh,record,sampler,pdf);
+                            if(pdf>0.f)
+                            {
+                                Vector3f wi = record.Light_Sample_point - its.p;
+                                Ray3f shadow_ray(its.p, wi.normalized(), Epsilon, wi.norm() - Epsilon);
+                                wi.normalize();
+                                Intersection its_shadow;
+                                if (!scene->rayIntersect(shadow_ray, its_shadow))
+                                {
+                                    BSDFQueryRecord bRec(its.shFrame.toLocal(wi),its.shFrame.toLocal(-ray.d),  EMeasure::ESolidAngle);
+                                    Li += radiance * its.mesh->getBSDF()->eval(bRec) * std::abs(its.shFrame.n.dot(wi)) * std::abs(record.AreaLight_normal.dot(-wi))
+                                    /(record.Light_Sample_point - its.p).squaredNorm()/pdf;
+                                }
+                            }
+                            
+                        }
+                    }
+                    
+                }
+
+                return Le+Li;
             }
+            else{ //specular surface
+                const auto bsdf = its.mesh->getBSDF();
+                auto sample_pt = sampler->next2D();
+                BSDFQueryRecord brec(its.toLocal(-ray.d));
+                auto atteunance = bsdf->sample(brec,sample_pt);
 
-            return Le+Li;
+                //use russian roullete
+                constexpr float russian_roulete=0.95f;
+                if(sampler->next1D()<russian_roulete && atteunance[0]>0.f)
+                {
+                    return this->Li(scene,sampler,Ray3f(its.p,its.toWorld(brec.wo))) /0.95f*atteunance ;
 
+                }                
+                else{
+                    return Color3f(0.f);
+                }
+
+            }
         }
 
         std::string toString() const {

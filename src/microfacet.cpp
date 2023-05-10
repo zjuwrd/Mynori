@@ -38,17 +38,46 @@ public:
 
     /// Evaluate the BRDF for the given pair of directions
     Color3f eval(const BSDFQueryRecord &bRec) const {
-    	throw NoriException("MicrofacetBRDF::eval(): not implemented!");
+        Vector3f h = (bRec.wi+bRec.wo).normalized();
+        float cosThetaI = Frame::cosTheta(bRec.wi);
+        float cosThetaO = Frame::cosTheta(bRec.wo);
+        float d = DistributeBeckmann(h, m_alpha);
+        float g = G1(bRec.wi, h, m_alpha) * G1(bRec.wo, h, m_alpha);
+        float f = fresnel(h.dot(bRec.wi), m_extIOR, m_intIOR);
+        
+        return m_kd / M_PI + m_ks * d * g * f / (4.f * cosThetaI * cosThetaO);
     }
 
     /// Evaluate the sampling density of \ref sample() wrt. solid angles
     float pdf(const BSDFQueryRecord &bRec) const {
-    	throw NoriException("MicrofacetBRDF::pdf(): not implemented!");
+        if(bRec.wo.z()<=0.f)return 0.f;
+        Vector3f h = (bRec.wi+bRec.wo).normalized();
+        float d = DistributeBeckmann(h, m_alpha);
+
+        return m_ks*d*Frame::cosTheta(h)/(4.f*bRec.wo.dot(h))+(1.f-m_ks)*Frame::cosTheta(bRec.wo)*INV_PI;
     }
 
     /// Sample the BRDF
     Color3f sample(BSDFQueryRecord &bRec, const Point2f &_sample) const {
-    	throw NoriException("MicrofacetBRDF::sample(): not implemented!");
+        if(Frame::cosTheta(bRec.wi)<=0.f)return Color3f(0.f);
+
+        if(_sample.x()>m_ks)//diffuse
+        {
+            Point2f sample((_sample.x()-m_ks )/(1.f-m_ks), _sample.y());
+            bRec.wo = Warp::squareToCosineHemisphere(sample);
+        }
+        else{ //highlight
+            Point2f sample(_sample.x()/m_ks, _sample.y());
+            Vector3f h = Warp::squareToBeckmann(sample, m_alpha);
+            bRec.wo = (2.f*h.dot(bRec.wi)*h-bRec.wi).normalized();
+        }
+
+        if(bRec.wo.z()<0.f)
+        {
+            return Color3f(0.f);
+        }
+
+        return eval(bRec)*Frame::cosTheta(bRec.wo)/pdf(bRec);
 
         // Note: Once you have implemented the part that computes the scattered
         // direction, the last part of this function should simply return the
@@ -63,6 +92,31 @@ public:
            hence we return true here */
         return true;
     }
+
+    static float DistributeBeckmann(const Vector3f& wh, float alpha)
+    {
+        float tanTheta = Frame::tanTheta(wh);
+        float cosTheta = Frame::cosTheta(wh);
+        float a = std::exp(-(tanTheta * tanTheta) / (alpha * alpha));
+        float b = M_PI * alpha * alpha * std::pow(cosTheta, 4);
+        return a / b;
+    }
+
+    static float G1(const Vector3f &v, const Vector3f &m, float alpha)
+    {
+        if( v.dot(m)/Frame::cosTheta(v)<=0.f)return 0.f;
+
+
+        float tanTheta = Frame::tanTheta(v);
+        if (tanTheta == 0)
+            return 1;
+        float a = 1 / (alpha * tanTheta);
+        if (a >= 1.6f)
+            return 1;
+        float b = 3.535f * a + 2.181f * a * a;
+        return (b / (1.0f + 2.276f * a + 2.577f * a * a)) * (1.0f / (1.0f + 2.577f * a + 3.792f * a * a));
+    }
+
 
     std::string toString() const {
         return tfm::format(

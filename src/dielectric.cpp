@@ -31,8 +31,35 @@ public:
     }
 
     Color3f sample(BSDFQueryRecord &bRec, const Point2f &sample) const {
-        throw NoriException("Unimplemented!");
+        bRec.measure = EDiscrete;
+        float cosThetaI = Frame::cosTheta(bRec.wi);
+        float kr = fresnel(cosThetaI, m_extIOR, m_intIOR);
+
+        if (sample.x() < kr) {//reflect
+        bRec.wo = Vector3f(-bRec.wi.x(), -bRec.wi.y(), bRec.wi.z());
+        bRec.eta = 1.f;
+        return Color3f(1.0f);
+        } 
+        else {//refract
+            Vector3f n = Vector3f(0.0f, 0.0f, 1.0f);
+            float factor = m_intIOR / m_extIOR;
+            if (Frame::cosTheta(bRec.wi) < 0.f) {//transmit from outside to inside
+                factor = m_intIOR / m_extIOR;
+                n = -n;
+            }
+            else{//transmit from inside to outside
+                factor = m_extIOR / m_intIOR;
+            }
+            
+            
+            bRec.wo = refract(bRec.wi, n, factor);
+            bRec.eta = m_intIOR / m_extIOR;
+            return Color3f(1.0f);
+        }
+
+
     }
+
 
     std::string toString() const {
         return tfm::format(
@@ -43,6 +70,18 @@ public:
             m_intIOR, m_extIOR);
     }
 private:
+
+static Vector3f refract(const Vector3f& wi, const Vector3f& n, float eta)
+{
+    float cosThetaI = wi.dot(n);
+    float sin2ThetaI = std::max(0.0f, 1.0f - cosThetaI * cosThetaI);
+    float sin2ThetaT = eta * eta * sin2ThetaI;
+    if (sin2ThetaT >= 1.0f) // full reflection
+        return Vector3f(0, 0, 0);
+    float cosThetaT = std::sqrt(1.0f - sin2ThetaT);
+    if(cosThetaI > 0.f) cosThetaT = -cosThetaT;
+    return eta * -wi + (eta * cosThetaI + cosThetaT) * n;
+}
     float m_intIOR, m_extIOR;
 };
 
