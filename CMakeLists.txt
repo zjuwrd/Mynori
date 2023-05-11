@@ -35,6 +35,9 @@ include_directories(
   SYSTEM ${STB_IMAGE_WRITE_INCLUDE_DIR}
 )
 
+set(CXX_STANDARD 17)
+set(CXX_STANDARD_REQUIRED ON)
+
 # The following lines build the main executable. If you add a source
 # code file to Nori, be sure to include it in this list.
 add_executable(nori
@@ -132,7 +135,7 @@ if (CMAKE_GENERATOR STREQUAL "Ninja")
   endif()
 endif()
 
-target_compile_features(warptest PRIVATE cxx_std_17)
-target_compile_features(nori PRIVATE cxx_std_17)
+target_compile_features(warptest PRIVATE cxx_std_20)
+target_compile_features(nori PRIVATE cxx_std_20)
 
 # vim: set et ts=2 sw=2 ft=cmake nospell:

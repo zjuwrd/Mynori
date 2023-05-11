@@ -20,6 +20,8 @@ public:
         m_extIOR = propList.getFloat("extIOR", 1.000277f);
     }
 
+    virtual bool isDelta()const{return true; }
+
     Color3f eval(const BSDFQueryRecord &) const {
         /* Discrete BRDFs always evaluate to zero in Nori */
         return Color3f(0.0f);

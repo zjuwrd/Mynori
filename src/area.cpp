@@ -40,8 +40,10 @@ public:
         lRec.emitter = this;
 		lRec.dist = (lRec.p - lRec.ref).norm();
 		
-		if(!std::isnan(lRec.pdf) && lRec.pdf >= 0.0f && std::abs(lRec.pdf) != std::numeric_limits<float>::infinity()) 
+		if(!std::isnan(lRec.pdf) && lRec.pdf > 0.0f && std::abs(lRec.pdf) != std::numeric_limits<float>::infinity()) 
+        {
             return eval(lRec) / lRec.pdf;
+        }
 		else return 0.0f;
     }
 

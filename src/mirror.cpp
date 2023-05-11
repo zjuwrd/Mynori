@@ -13,7 +13,9 @@ NORI_NAMESPACE_BEGIN
 class Mirror : public BSDF {
 public:
     Mirror(const PropertyList &) { }
-
+    
+    virtual bool isDelta()const{return true;}
+    
     Color3f eval(const BSDFQueryRecord &) const {
         /* Discrete BRDFs always evaluate to zero in Nori */
         return Color3f(0.0f);

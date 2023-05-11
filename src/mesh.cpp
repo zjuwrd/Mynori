@@ -13,6 +13,9 @@
 
 NORI_NAMESPACE_BEGIN
 
+
+
+
 Mesh::Mesh() { }
 
 Mesh::~Mesh() {
@@ -205,5 +208,34 @@ std::string Intersection::toString() const {
         mesh ? mesh->toString() : std::string("null")
     );
 }
+
+MeshQeuryRecord Mesh::UniformSamplePoint(Sampler* sampler) const 
+{
+    MeshQeuryRecord result;
+    uint32_t idx = m_dpdf->sample(sampler->next1D());
+    Point2f rng = sampler->next2D();
+    float alpha = 1 - sqrt(1 - rng.x());
+    float beta = rng.y() * sqrt(1 - rng.x());
+    Point3f v0 = m_V.col(m_F(0, idx));
+    Point3f v1 = m_V.col(m_F(1, idx));
+    Point3f v2 = m_V.col(m_F(2, idx));
+    Point3f p = alpha * v0 + beta * v1 + (1 - alpha - beta) * v2;
+    result.p = p;
+    if (m_N.size() != 0) {
+        Point3f n0 = m_N.col(m_F(0, idx));
+        Point3f n1 = m_N.col(m_F(1, idx));
+        Point3f n2 = m_N.col(m_F(2, idx));
+        result.n = (alpha * n0 + beta * n1 + (1 - alpha - beta) * n2).normalized();
+    } else {
+        Vector3f e1 = v1 - v0;
+        Vector3f e2 = v2 - v0;
+        result.n = e1.cross(e2).normalized();
+    }
+    result.pdf = m_dpdf->getNormalization();
+    return result;
+
+}
+
+
 
 NORI_NAMESPACE_END

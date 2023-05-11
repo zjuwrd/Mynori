@@ -52,6 +52,16 @@ struct Intersection {
     std::string toString() const;
 };
 
+
+
+
+struct MeshQeuryRecord{
+        Point3f p;
+        Normal3f n;
+        float pdf;
+};
+
+
 /**
  * \brief Triangle mesh
  *
@@ -62,10 +72,16 @@ struct Intersection {
  */
 class Mesh : public NoriObject {
 public:
+    
+
+
     /// Sample point on the mesh uniformly
     std::pair<Point3f,Normal3f> UniformSamplePoint(Sampler* sampler, float& pdf) const;
 
     virtual void samplePosition(const Point2f& sample, Point3f& position, Normal3f& normal, const float optional_u)const;
+    
+    virtual MeshQeuryRecord UniformSamplePoint(Sampler* sampler) const ;
+
 
     inline virtual float totalArea()const{return m_dpdf->getSum();} 
     inline virtual float pdf()const{return m_dpdf->getNormalization();}

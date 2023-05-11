@@ -36,6 +36,8 @@ public:
         m_ks = 1 - m_kd.maxCoeff();
     }
 
+    virtual bool isDelta()const{return false;}
+
     /// Evaluate the BRDF for the given pair of directions
     Color3f eval(const BSDFQueryRecord &bRec) const {
         Vector3f h = (bRec.wi+bRec.wo).normalized();

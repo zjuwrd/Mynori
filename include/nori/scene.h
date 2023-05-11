@@ -36,7 +36,7 @@ public:
     /// @return idxth emissive mesh if it exists, else nullptr
     const Mesh* getLight(size_t idx)const
     {
-        int count = 0;
+        size_t count = 0;
         for (auto mesh : m_meshes)
         {
             if (mesh->isEmitter())
@@ -47,6 +47,17 @@ public:
             }
         }
         return nullptr;
+    }
+
+    std::vector<Mesh*> getLights()const
+    {
+        std::vector<Mesh*> ret;
+        for(auto mesh : m_meshes)
+        {
+            if(mesh->isEmitter())ret.push_back(mesh);
+        }
+
+        return ret;
     }
 
 
@@ -64,6 +75,16 @@ public:
         pdf = 1.0f / count;
         return getLight(idx);
     }
+
+    const Mesh* SampleLight(const float point)const
+    {
+        size_t count = getEmissiveMeshesCount();
+        if (count == 0)
+            return nullptr;
+        size_t idx = std::min((size_t)(point * count), count - 1);
+        return getLight(idx);
+    }
+
 
 
 

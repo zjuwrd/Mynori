@@ -86,6 +86,8 @@ public:
 
     virtual float pdf(const BSDFQueryRecord &bRec) const = 0;
 
+    virtual bool isDelta() const {return false;}
+
     /**
      * \brief Return the type of object (i.e. Mesh/BSDF/etc.)
      * provided by this instance
