@@ -33,6 +33,9 @@ template <typename _PointType, typename _VectorType> struct TRay {
     Scalar mint;     ///< Minimum position on the ray segment
     Scalar maxt;     ///< Maximum position on the ray segment
 
+    size_t depth=0;  ///< Depth of the ray (0 = primary ray)
+    float throughput=1.0f; ///< Throughput of the ray (1.0 = primary ray)
+
     /// Construct a new ray
     TRay() : mint(Epsilon), 
         maxt(std::numeric_limits<Scalar>::infinity()) { }

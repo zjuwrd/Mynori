@@ -11,7 +11,38 @@
 #include <nori/camera.h>
 #include <nori/emitter.h>
 
+#include <nori/bsdf.h>
 NORI_NAMESPACE_BEGIN
+
+
+
+Color3f Scene::SampleLd(const Ray3f& ray, const Intersection& its, Sampler* sampler )const
+{
+
+    #if 1
+    EmitterQueryRecord eRec(its.p);
+    float light_pdf = 0.f;
+    const Mesh* EmissiveMesh =  this->SampleLight(sampler->next1D(),light_pdf);
+    const Emitter* emitter = EmissiveMesh->getEmitter();
+    Color3f radiance = emitter->sample(eRec,sampler);
+    if(light_pdf>0.f)
+    {
+        if(this->rayIntersect(eRec.shadowRay()))
+           return 0.f;
+        
+        auto bsdf = its.mesh->getBSDF();
+        BSDFQueryRecord bRec(its.toLocal(-ray.d),its.toLocal(eRec.wi),EMeasure::ESolidAngle);
+        Color3f fr = bsdf->eval(bRec);
+        float cosTheta = std::max(0.f, its.toLocal(eRec.wi).z());
+        return radiance*fr*cosTheta / light_pdf;
+    }
+    else{
+        return 0.f;
+    }
+    #endif
+}
+
+
 
 Scene::Scene(const PropertyList &) {
     m_accel = new Accel();

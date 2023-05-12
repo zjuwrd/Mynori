@@ -70,50 +70,55 @@ add_executable(nori
   include/nori/warp.h
 
   # Source code files
-  src/path_mis.cpp
-  src/path_ems.cpp
-  src/path_mats.cpp
-  src/whitted.cpp
-  src/area.cpp
-  src/bvh.cpp
-  src/ao.cpp
-  src/simple.cpp
-  src/normals.cpp
-  src/bitmap.cpp
-  src/block.cpp
-  src/accel.cpp
-  src/chi2test.cpp
-  src/common.cpp
-  src/diffuse.cpp
-  src/gui.cpp
-  src/independent.cpp
-  src/main.cpp
-  src/mesh.cpp
-  src/obj.cpp
-  src/object.cpp
-  src/parser.cpp
-  src/perspective.cpp
-  src/proplist.cpp
-  src/rfilter.cpp
-  src/scene.cpp
-  src/ttest.cpp
-  src/warp.cpp
-  src/microfacet.cpp
-  src/mirror.cpp
-  src/dielectric.cpp
-)
+  src/integrator/path_mis.cpp
+  src/integrator/path_ems.cpp
+  src/integrator/path_mats.cpp
+  src/integrator/whitted.cpp
+  src/integrator/ao.cpp
+  src/integrator/simple.cpp
+  
+  src/light/area.cpp
+
+  src/BSDF/diffuse.cpp
+  src/BSDF/microfacet.cpp
+  src/BSDF/mirror.cpp
+  src/BSDF/dielectric.cpp
+
+  src/accelerate/bvh.cpp
+  src/accelerate/accel.cpp
+
+  src/distribute/warp.cpp
+  
+  src/core/normals.cpp
+  src/core/bitmap.cpp
+  src/core/block.cpp
+  src/core/chi2test.cpp
+  src/core/common.cpp
+  src/core/gui.cpp
+  src/core/independent.cpp
+  src/core/main.cpp
+  src/core/mesh.cpp
+  src/core/obj.cpp
+  src/core/object.cpp
+  src/core/parser.cpp
+  src/core/perspective.cpp
+  src/core/proplist.cpp
+  src/core/rfilter.cpp
+  src/core/scene.cpp
+  src/core/ttest.cpp
+  )
 
 add_definitions(${NANOGUI_EXTRA_DEFS})
 
 # The following lines build the warping test application
 add_executable(warptest
   include/nori/warp.h
-  src/warp.cpp
-  src/warptest.cpp
-  src/microfacet.cpp
-  src/object.cpp
-  src/proplist.cpp
-  src/common.cpp
+  src/distribute/warp.cpp
+  src/core/warptest.cpp
+  src/BSDF/microfacet.cpp
+  src/core/object.cpp
+  src/core/proplist.cpp
+  src/core/common.cpp
 )
 
 if (WIN32)

@@ -23,6 +23,32 @@ Mesh::~Mesh() {
     delete m_emitter;
 }
 
+SampleMeshResult Mesh::sampleSurfaceUniform(Sampler* sampler) const {
+  SampleMeshResult result;
+  uint32_t idx = m_dpdf->sample(sampler->next1D());//均匀随机一个三角形
+  //重心坐标
+  Point2f rng = sampler->next2D();//算重心坐标
+  float alpha = 1 - sqrt(1 - rng.x());
+  float beta = rng.y() * sqrt(1 - rng.x());
+  Point3f v0 = m_V.col(m_F(0, idx));
+  Point3f v1 = m_V.col(m_F(1, idx));
+  Point3f v2 = m_V.col(m_F(2, idx));
+  Point3f p = alpha * v0 + beta * v1 + (1 - alpha - beta) * v2;//用重心坐标插值出坐标
+  result.p = p;
+  if (m_N.size() != 0) {//如果有存法线
+    Point3f n0 = m_N.col(m_F(0, idx));
+    Point3f n1 = m_N.col(m_F(1, idx));
+    Point3f n2 = m_N.col(m_F(2, idx));
+    result.n = (alpha * n0 + beta * n1 + (1 - alpha - beta) * n2).normalized();//用重心坐标插值出法线
+  } else {
+    Vector3f e1 = v1 - v0;
+    Vector3f e2 = v2 - v0;
+    result.n = e1.cross(e2).normalized();//叉乘算法线
+  }
+  result.pdf = m_dpdf->getNormalization();
+  return result;
+}
+
 std::pair<Point3f,Normal3f> Mesh::UniformSamplePoint(Sampler* sampler, float& pdf) const
 {
     float s = sampler->next1D();
@@ -75,11 +101,13 @@ void Mesh::activate() {
             NoriObjectFactory::createInstance("diffuse", PropertyList()));
     }
     //Precomputing discrete pdf for sampling
-    for(uint32_t f =0;f<m_F.cols();f++){
-        float area = surfaceArea(f);
+    m_area = 0.f;
+    for(uint32_t i =0;i<getTriangleCount();++i)
+    {
+        float area = surfaceArea(i);
+        m_area += area;
         m_dpdf->append(area);
     }
-
 
     m_dpdf->normalize();
     

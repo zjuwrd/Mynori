@@ -86,6 +86,7 @@ public:
 
     virtual float pdf(const BSDFQueryRecord &bRec) const = 0;
 
+    virtual bool isNull()const {return false;}
     virtual bool isDelta() const {return false;}
 
     /**

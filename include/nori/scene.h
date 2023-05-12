@@ -19,6 +19,10 @@ NORI_NAMESPACE_BEGIN
  */
 class Scene : public NoriObject {
 public:
+
+    Color3f SampleLd(const Ray3f& ray, const Intersection& its, Sampler* sampler )const;
+
+
     ///return the number of emissive meshes
     size_t getEmissiveMeshesCount() const
     {

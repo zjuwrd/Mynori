@@ -40,6 +40,7 @@ public:
         lRec.emitter = this;
 		lRec.dist = (lRec.p - lRec.ref).norm();
 		
+
 		if(!std::isnan(lRec.pdf) && lRec.pdf > 0.0f && std::abs(lRec.pdf) != std::numeric_limits<float>::infinity()) 
         {
             return eval(lRec) / lRec.pdf;
@@ -51,9 +52,13 @@ public:
 	virtual float pdf(const EmitterQueryRecord &lRec) const {
         assert(m_mesh);
 
-		float cosThetaPrime = std::abs(lRec.n.dot(-lRec.wi));
+		float cosThetaPrime = std::max(0.f , lRec.n.dot(-lRec.wi));
 
         //tranform pdf from area measure to solid angle measure    
+        if(std::abs(cosThetaPrime)<1e-5f )
+        {
+            return 0.0f;
+        }
 		float pdf_ = m_mesh->pdf() * std::pow(lRec.dist,2) / cosThetaPrime;
 		//erase irrational values
         if (isnan(pdf_) || fabsf(pdf_) == INFINITY)

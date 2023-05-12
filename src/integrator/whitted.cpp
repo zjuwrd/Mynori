@@ -25,18 +25,18 @@ class WhittedIntegrator : public Integrator {
 
         //sample direct light
         if (its.mesh->getBSDF()->isDiffuse()) {
-        const Mesh* lightMesh = scene->SampleLight(sampler->next1D());
-        EmitterQueryRecord lRec(its.p);
-        Color3f Li = lightMesh->getEmitter()->sample( lRec, sampler);
-        if (scene->rayIntersect(lRec.shadowRay())) {
-            Li = 0;
-        }
+            const Mesh* lightMesh = scene->SampleLight(sampler->next1D());
+            EmitterQueryRecord lRec(its.p);
+            Color3f Li = lightMesh->getEmitter()->sample( lRec, sampler);
+            if (scene->rayIntersect(lRec.shadowRay())) {
+                Li = 0;
+            }
 
-        float cosTheta =  std::max(0.f, Frame::cosTheta(its.shFrame.toLocal(lRec.wi)));
-        BSDFQueryRecord bRec(its.toLocal(-ray.d), its.toLocal(lRec.wi), ESolidAngle);
-        Color3f f = its.mesh->getBSDF()->eval(bRec);
-        
-        return Le + Li * f * cosTheta * float(scene->getEmissiveMeshesCount());
+            float cosTheta =  std::max(0.f, Frame::cosTheta(its.shFrame.toLocal(lRec.wi)));
+            BSDFQueryRecord bRec(its.toLocal(-ray.d), its.toLocal(lRec.wi), ESolidAngle);
+            Color3f f = its.mesh->getBSDF()->eval(bRec);
+            
+            return Le + Li * f * cosTheta * float(scene->getEmissiveMeshesCount());
         } 
         else {
             BSDFQueryRecord bRec(its.toLocal(-ray.d));

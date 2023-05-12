@@ -13,6 +13,9 @@
 #include<memory>
 NORI_NAMESPACE_BEGIN
 
+
+
+
 /**
  * \brief Intersection data structure
  *
@@ -61,6 +64,7 @@ struct MeshQeuryRecord{
         float pdf;
 };
 
+using SampleMeshResult = MeshQeuryRecord;
 
 /**
  * \brief Triangle mesh
@@ -73,7 +77,7 @@ struct MeshQeuryRecord{
 class Mesh : public NoriObject {
 public:
     
-
+    SampleMeshResult sampleSurfaceUniform(Sampler* sampler)const;
 
     /// Sample point on the mesh uniformly
     std::pair<Point3f,Normal3f> UniformSamplePoint(Sampler* sampler, float& pdf) const;
@@ -84,7 +88,7 @@ public:
 
 
     inline virtual float totalArea()const{return m_dpdf->getSum();} 
-    inline virtual float pdf()const{return m_dpdf->getNormalization();}
+    inline virtual float pdf()const{return 1.f/m_area;}
 
     /// Release all memory
     virtual ~Mesh();
@@ -191,6 +195,7 @@ protected:
     Emitter    *m_emitter = nullptr;     ///< Associated emitter, if any
     BoundingBox3f m_bbox;                ///< Bounding box of the mesh
 
+    float m_area=0.f;
     std::shared_ptr<DiscretePDF> m_dpdf = std::make_shared<DiscretePDF>();                  ///< Discrete PDF for sampling triangles
 };
 
