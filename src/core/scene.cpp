@@ -19,7 +19,6 @@ NORI_NAMESPACE_BEGIN
 Color3f Scene::SampleLd(const Ray3f& ray, const Intersection& its, Sampler* sampler )const
 {
 
-    #if 1
     EmitterQueryRecord eRec(its.p);
     float light_pdf = 0.f;
     const Mesh* EmissiveMesh =  this->SampleLight(sampler->next1D(),light_pdf);
@@ -39,7 +38,7 @@ Color3f Scene::SampleLd(const Ray3f& ray, const Intersection& its, Sampler* samp
     else{
         return 0.f;
     }
-    #endif
+
 }
 
 

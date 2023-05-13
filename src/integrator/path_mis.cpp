@@ -115,62 +115,105 @@ class PathMisIntegrator : public Integrator {
 
   Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray_) const override {
 
-#if 0
-	 Color3f L(0.f);
-    Intersection its;
-    
-    if(!scene->rayIntersect(ray_,its))
-    {
-      return L;
-    }
-
-    auto mesh = its.mesh;
-    //Le
-    if(mesh->isEmitter()&&ray_.depth == 0)
-    {
-      EmitterQueryRecord lRecE(ray_.o, its.p, its.shFrame.n);
-      L += mesh->getEmitter()->eval(lRecE);
-    }
-
-    //ld
-	auto Ld = this->LiDirect(scene,sampler,ray_,its);
-	L += Ld/2.f;
+#if 1
+	constexpr uint32_t MAX_depth = 40;
+	constexpr uint32_t Min_depth = 3; 
+	Color3f Li(0.f);
+	Color3f throughput(1.f);
+	Intersection its;
+	Ray3f ray(ray_);
+	float w_mats=1.f;
+	float w_ems = 1.f;
 
 
-    //russian_roulette
-	
-    float RR_prob=1.f;
-	if(ray_.depth > 4)
+
+	for(uint32_t depth=0;depth<MAX_depth && scene->rayIntersect(ray,its); ++depth)
 	{
-		RR_prob = std::max(0.001f, std::min(0.99f, ray_.throughput));
-		if(sampler->next1D()>RR_prob)
+		//Le
+		if(its.mesh->isEmitter())
 		{
-			return L;
+			EmitterQueryRecord eQ(ray.o,its.p,its.shFrame.n);
+			const Emitter* emitter = its.mesh->getEmitter();
+			Li+= w_mats * throughput * emitter->eval(eQ);
 		}
+
+		//Ld
+		if(its.mesh->getBSDF()->isDelta())
+		{
+			//do nothing
+		}
+		else{
+			EmitterQueryRecord eQ(its.p);
+			float light_pdf =0.f;
+			const Emitter* emitter = scene->SampleLight(sampler->next1D(),light_pdf)->getEmitter();
+			Color3f Ld = emitter->sample(eQ,sampler);
+			float ems_pdf = eQ.pdf;
+			BSDFQueryRecord bQ(its.toLocal(-ray.d),its.toLocal(eQ.wi),ESolidAngle);
+			Color3f fr = its.mesh->getBSDF()->eval(bQ);
+			float mats_pdf = its.mesh->getBSDF()->pdf(bQ);
+			float cosTheta = std::max(0.f, Frame::cosTheta(its.toLocal(eQ.wi)));
+			w_ems = ems_pdf+mats_pdf>0.f?ems_pdf/(ems_pdf+mats_pdf):0.f;
+
+			Li += w_ems * throughput * fr * Ld * cosTheta / light_pdf;
+		}
+	
+
+		//russian roulette
+		if(depth>Min_depth)
+		{
+			float q = std::max(0.05f,1.f-throughput.maxCoeff());
+			if(sampler->next1D()<q)
+				break;
+			throughput /= 1.f-q;
+		}
+
+		//sample indirect light
+		BSDFQueryRecord bQ(its.toLocal(-ray.d));
+		Color3f bsdf_cosTheta = its.mesh->getBSDF()->sample(bQ,sampler->next2D());
+		throughput *= bsdf_cosTheta;
+
+		if(bQ.measure == EDiscrete)
+		{
+			w_mats = 1.f;
+		}
+		else{
+			float mats_pdf = its.mesh->getBSDF()->pdf(bQ);
+			Ray3f testray(its.p,its.toWorld(bQ.wo));
+			Intersection testits;
+			if(scene->rayIntersect(testray,testits))
+			{
+				if(testits.mesh->isEmitter())
+				{
+					EmitterQueryRecord eQ(its.p,testits.p,testits.shFrame.n);
+					const Emitter* emitter = testits.mesh->getEmitter();
+					float ems_pdf = emitter->pdf(eQ);
+					w_mats = mats_pdf+ems_pdf>0.f?mats_pdf/(mats_pdf+ems_pdf):0.f;
+				}
+				else
+				{
+					w_mats = 1.f;
+				}
+			}
+			else
+			{
+				w_mats = 1.f;
+			}
+		}
+
+		ray = Ray3f(its.p,its.toWorld(bQ.wo));
 	}
-    //indirect
-    BSDFQueryRecord bRec(its.toLocal(-ray_.d));
-    Color3f bsdf_cosTheta = mesh->getBSDF()->sample(bRec, sampler->next2D());
-    Ray3f ray_indirect(its.p, its.toWorld(bRec.wo));
-    ray_indirect.depth = ray_.depth+1;
-    ray_indirect.throughput *= (bsdf_cosTheta.maxCoeff() / RR_prob);
 
-    Color3f L_indirect = Li(scene, sampler, ray_indirect);
-    if(!its.mesh->getBSDF()->isDelta())
-	{
-		L_indirect *= 0.5f;
-	}
+	
 
-    L += L_indirect * bsdf_cosTheta / RR_prob;
-
-  return L;
+	return Li;
+	 
 
 
 #endif
 
 
 
-#if 1
+#if 0
     constexpr size_t Max_depth = 1000;
     constexpr size_t Min_depth = 5;
 
@@ -180,19 +223,22 @@ class PathMisIntegrator : public Integrator {
     Intersection its;
     size_t depth = 0;
 
+	bool is_specular = false;
+
     while(scene->rayIntersect(curRay, its)&& depth<Max_depth)
     {
       //Le
-      if(its.mesh->isEmitter() && depth == 0)
+      if(its.mesh->isEmitter() && (depth == 0 || is_specular))
       {
         EmitterQueryRecord ERec(curRay.o,its.p,its.shFrame.n);
         L += throughput*its.mesh->getEmitter()->eval(ERec);
       }
       //sample direct light using MIS
       Color3f Ld=0.f;
-      Ld = this->LiDirect(scene,sampler,curRay,its);
+	  Ld = this->LiDirect(scene,sampler,curRay,its);
 
-      L += Ld*throughput /2.f;
+	
+      L += Ld*throughput;
 
       //Russian Roulete
       if(depth > Min_depth)
@@ -211,11 +257,7 @@ class PathMisIntegrator : public Integrator {
         Color3f bsdf = its.mesh->getBSDF()->sample(BRec,sampler->next2D());
         throughput *= bsdf;
         curRay = Ray3f(its.p,its.toWorld(BRec.wo));
-		if(!its.mesh->getBSDF()->isDelta())
-		{
-			throughput *= 0.5f;
-		}
-
+		
 	  }
 
       depth++;

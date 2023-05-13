@@ -10,197 +10,173 @@ class PathEms : public Integrator {
  public:
   PathEms(const PropertyList& props) {}
 
-#if 1
-  Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& _ray) const override {
+
 #if 0
-    
-    Color3f L(0.f);
+Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const
+  {
+    Color3f result(0.f);
     Intersection its;
-    auto w_ems = 0.5f;
-    auto w_mat = 0.5f;
-    
-    
-    if(!scene->rayIntersect(_ray,its))
+    //无交点 返回黑色 程序有偏移量bug
+    if (!scene->rayIntersect(ray, its))
     {
-      return L;
+      return result;
     }
 
-    auto mesh = its.mesh;
-    //Le
-    if(mesh->isEmitter())
+    //统计光源
+    std::vector<Mesh *> Meshes = scene->getMeshes();
+    std::vector<Mesh *> light_source;
+    float totalArea = 0.f;
+    for (auto x : Meshes)
     {
-      EmitterQueryRecord eQE(_ray.o, its.p, its.shFrame.n);
-      L += mesh->getEmitter()->eval(eQE);
+      if (x->isEmitter())
+      {
+        light_source.emplace_back(x);
+        totalArea += x->getDpdf()->getSum();
+      }
     }
+    uint32_t ls_nums = light_source.size();
 
-    //ld
-    auto Rand_Emitter = scene->SampleLight(sampler->next1D())->getEmitter();
-    EmitterQueryRecord eQ(its.p);
-    Color3f Ld = Rand_Emitter->sample(eQ, sampler);
-    Color3f bsdf = mesh->getBSDF()->eval(BSDFQueryRecord( its.toLocal( -_ray.d) , its.toLocal(eQ.wi), EMeasure::ESolidAngle));
-    float Costheta = std::max(0.f, Frame::cosTheta(its.toLocal(eQ.wi)));
-    
-    if(!scene->rayIntersect(eQ.shadowRay())) // no occlution
-      L += w_ems * Ld * bsdf * Costheta *scene->getEmissiveMeshesCount();
+    //否则就是正常着色点
+    float total_eta = 1.f;
+    Intersection x(its);
+    Ray3f r(ray);
+    Color3f wait_albedo(1.f);
+    uint32_t least_recursion = 0; //如果不设置最少递归次数，玻璃球的光出不去
+    uint32_t MAX_DEPTH = 5;
+    float maxComp = 1.f;
+    bool lastSpecular = false;
 
-    //russian_roulette
-    float RR_prob= std::max(0.001f, std::min(0.99f, _ray.throughput));
-    if(sampler->next1D()>RR_prob)
+    while (least_recursion < MAX_DEPTH || (sampler->next1D() < fmin(maxComp * total_eta * total_eta, 0.99)))
     {
-      return L;
-    }
-
-
-
-    //indirect
-    BSDFQueryRecord bRec(its.toLocal(-_ray.d));
-    Color3f bsdf_cosTheta = mesh->getBSDF()->sample(bRec, sampler->next2D());
-    Ray3f ray_indirect(its.p, its.toWorld(bRec.wo));
-    ray_indirect.depth = _ray.depth+1;
-    ray_indirect.throughput *= (bsdf_cosTheta.maxCoeff() / RR_prob);
-
-    Color3f L_indirect = Li(scene, sampler, ray_indirect);
-    w_mat = its.mesh->getBSDF()->isDelta() ? 1.f:0.5f;
-
-    L += w_mat * L_indirect * bsdf_cosTheta / RR_prob;
-
-  
-
-
-
-
-  return L;
-#endif
-
-
-#if 1
-    constexpr size_t Max_trace_depth = 1000;
-    constexpr size_t Min_trace_depth = 5;
-    
-    Color3f color = 0;
-    Color3f throughput = 1;
-    Ray3f rayRecursive = _ray;
-    float probability;
-    size_t depth = 0;
-    Intersection its;
-    bool is_specular=false;
-    int cnt = 0;
-    cnt++;
-    
-    while (scene->rayIntersect(rayRecursive, its) && depth<Max_trace_depth) {
+      Color3f dir_light(0.f);
       //Le
-      if (its.mesh->isEmitter() && (is_specular || depth == 0)) {
-        EmitterQueryRecord eQE(rayRecursive.o, its.p, its.shFrame.n);
-        color += throughput * its.mesh->getEmitter()->eval(eQE);
-        if(!color.isValid())
+      if (x.mesh->isEmitter())
+      {
+        EmitterQueryRecord eRec(r.o, x.p, x.shFrame.n);
+        if (least_recursion == 0 || lastSpecular)
+          result += x.mesh->getEmitter()->eval(eRec) * wait_albedo;
+      }
+      if(!x.mesh->getBSDF()->isDiffuse()) lastSpecular = true;
+      else lastSpecular = false;
+
+      //------------------------直接光 direct light---------------------------
+      //均匀随机采样光源
+      uint32_t index = sampler->next1D() * ls_nums;
+      Mesh *area_light = light_source[index];
+
+      //光源离散采样三角形
+      EmitterQueryRecord eRec(x.p);
+      EmitterQueryRecord eRec_dbg(x.p);
+      
+      
+      
+      Color3f Le = area_light->getEmitter()->sample(area_light, eRec, sampler) * ls_nums; //radiance/pdf，pdf要考虑光源个数
+
+      Color3f Le_dbg = area_light->getEmitter()->sample(eRec_dbg, sampler) * ls_nums;
+
+      Intersection y;
+      Ray3f rayo(x.p, eRec.wi);
+
+      if (scene->rayIntersect(rayo, y) && y.mesh == area_light)
+      {
+        if (eRec.n.dot(-eRec.wi) > 0.f)
         {
-          color = 0.f;
+          BSDFQueryRecord bRec(x.shFrame.toLocal(-r.d), x.shFrame.toLocal(eRec.wi), ESolidAngle);
+
+          eRec.pdf /= ls_nums; //考虑光源个数
+
+          Color3f fr = x.mesh->getBSDF()->eval(bRec);
+          float G = abs(x.shFrame.n.dot(eRec.wi)) * abs(eRec.n.dot(-eRec.wi)) / (eRec.p - eRec.ref).squaredNorm();
+
+          // Color3f dir = fr * G * Le;
+          Color3f dir = fr * Le_dbg;
+          dir_light += wait_albedo * dir;
         }
       }
 
-      //Ld
-      if(!its.mesh->getBSDF()->isDelta())
-      {  
-        float light_pdf=0.f;
-        const Emitter* light = scene->SampleLight(sampler->next1D(),light_pdf)->getEmitter();
-        EmitterQueryRecord eQ(its.p);
-        Color3f Ld = light->sample(eQ, sampler);
-        Color3f bsdf = its.mesh->getBSDF()->eval(BSDFQueryRecord( its.toLocal(eQ.wi), its.toLocal(-rayRecursive.d), EMeasure::ESolidAngle));
-        float cosTheta = Frame::cosTheta(its.toLocal(eQ.wi));
-        if(!scene->rayIntersect(eQ.shadowRay())) // no occlusion
-          color += throughput * bsdf * std::max(0.f,  cosTheta) * Ld / light_pdf;
-        is_specular = false;
-      }
-      else{
-        is_specular = true;
-      }
+      //------------------------间接光 indirect light---------------------------
 
-      //russian roulete
-      float p = std::min(throughput.maxCoeff(),0.99f);
-      if(sampler->next1D()>p)
+      BSDFQueryRecord bRec(x.shFrame.toLocal(-r.d.normalized()));
+      Color3f albedo = x.mesh->getBSDF()->sample(bRec, sampler->next2D());
+      Ray3f ro(x.p, x.shFrame.toWorld(bRec.wo)); //反射光线
+      Intersection next_x;
+
+      if (!scene->rayIntersect(ro, next_x))
       {
         break;
       }
-      else{
-        throughput/=p;
-      }
-      
-      //indirect light
-      BSDFQueryRecord brec(its.toLocal(-rayRecursive.d));
-      Color3f bsdf_cosTheta = its.mesh->getBSDF()->sample(brec,sampler->next2D());
-      throughput *= bsdf_cosTheta;
-      rayRecursive = Ray3f(its.p,its.toWorld(brec.wo));
-      depth++;
 
+      x = next_x;
+      r.o = ro.o;
+      r.d = ro.d;
+
+      if (least_recursion >= MAX_DEPTH)
+      {
+        total_eta *= bRec.eta;
+        maxComp = wait_albedo.maxCoeff(); //太小了就没必要继续弹射了
+      }
+      else
+      {
+        least_recursion++;
+      }
+
+      float q = total_eta * total_eta * maxComp;
+      wait_albedo *= albedo / q;
+
+      result += dir_light / q;
     }
 
-    return color;
-
-#endif
+    return result;
   }
+
 #endif
 
-#if 0
-  Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
-        Intersection its;           // Intersection information
-        Ray3f iterRay(ray);         // Ray used for path tracing
-        Color3f throughput = {1};   // Path throughput
-        Color3f fr;                 // Reflection or refraction factor (albedo)
-        Color3f L = {0};            // Final rendered light 
-        std::vector<Mesh *> meshes; // All meshes of the scene
-        EmitterQueryRecord eQ(Point3f(0.f,0.f,0.f));      // The emitter query record
-        float eta = 1.0f;           // Cumulative eta
-        float prob;                 // Probability to continue
-        bool foundIntersection;     // Whether there is an intersection point found
-        bool specularBounce = false;// Whether last bounce is a specular bounce
 
-        /* Start the path tracing */
+#if 1
+  Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const {
+        Intersection its;           
+        Ray3f iterRay(ray);         
+        Color3f throughput = 1.f;   
+        Color3f fr;                 
+        Color3f L = 0.f;             
+        bool lastSpecular = false;
+
         for (uint32_t bounces = 0;scene->rayIntersect(iterRay, its) ; ++bounces) {
-            /* Add the emitter light at path vertex */
-            if ((bounces == 0 || specularBounce) && its.mesh->isEmitter()) {
-                eQ = EmitterQueryRecord(iterRay.o,its.p,its.shFrame.n);
+            //Le taken into account only when hit the light source directly
+            //or the last bounce is a specular bounce
+            if ((bounces == 0 || lastSpecular) && its.mesh->isEmitter()) {
+                EmitterQueryRecord eQ = EmitterQueryRecord(iterRay.o,its.p,its.shFrame.n);
                 L += throughput * its.mesh->getEmitter()->eval(eQ);
             }
+            
+            //sample direct light
+            if(!its.mesh->getBSDF()->isDelta())
+            {
+              L += throughput * scene->SampleLd(iterRay,its,sampler);
+              lastSpecular = false;
+            }
+            else
+            {
+              lastSpecular = true;
+            }
 
-            // if (its.mesh->getBSDF()->isNull()) {
-            //     Ray3f temp = Ray3f(its.p, iterRay.d);
-            //     memcpy(&iterRay, &temp, sizeof(Ray3f));
-                
-            //     bounces--;
-            //     continue;
-            // }
-            
-            /* Explicit sampling direct emitters */
-            L += throughput * scene->SampleLd(iterRay,its,sampler);
-            
-            
-            /* Account for indirect light, we sample a new direction on this surface */
+            //Russian roulette
+            float p = std::min(0.99f, throughput.maxCoeff());
+            if (bounces > 3) {
+                if (sampler->next1D() > p) {
+                    break;
+                }
+                throughput /= p;
+            }
+
+            //sample direction for indirect light
             BSDFQueryRecord bQ(its.shFrame.toLocal(-iterRay.d).normalized());
             fr = its.mesh->getBSDF()->sample(bQ, sampler->next2D());
-            specularBounce = bQ.measure == EDiscrete;
+            throughput *= fr;
             if (fr.getLuminance() == 0.0f) break;
-
-            /* Update the iteration ray given the sampling */
-            // Ray3f temp = Ray3f(its.p, its.shFrame.toWorld(bQ.wo));
-            // memcpy(&iterRay, &temp, sizeof(Ray3f));
-            iterRay.o = its.p;
-            iterRay.d = its.toWorld(bQ.wo);
-            iterRay.update();
-            // iterRay = Ray3f(its.p, its.toWorld(bQ.wo));
-
-
-            /* Compute the probability to continue */
-            eta *= bQ.eta;
-            prob = std::min(0.99f, throughput.maxCoeff() * eta * eta);
-            /* Only start doing Russian Roulette after at least three bounces */
-            prob = bounces < 4 ? 1 : prob;
-
-            /* Use the Russian Roulette */
-            if (sampler->next1D() < prob) {
-                throughput *= fr / prob;
-            } else {
-                break;
-            }
+            //generate new ray
+            iterRay = Ray3f(its.p, its.toWorld(bQ.wo));
+            
         }
         return L;
     }

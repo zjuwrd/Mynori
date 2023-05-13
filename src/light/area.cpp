@@ -28,18 +28,48 @@ public:
 		else return 0.0f;
     }
 
+
+    //生成采样点
+    virtual Color3f sample(const Mesh* mesh, EmitterQueryRecord &eRec, Sampler* &sample) const override
+    {
+        SampleMeshResult point = mesh->sampleSurfaceUniform(sample);
+        eRec.p = point.p;
+        eRec.n = point.n;
+        eRec.wi = (eRec.p - eRec.ref).normalized();
+        eRec.pdf = pdf(mesh, eRec);//光源面积pdf
+
+        if(eRec.pdf > 0.0f && !std::isnan(eRec.pdf) && !std::isinf(eRec.pdf)) {
+            return eval(eRec) / eRec.pdf;//这里没有cos项，缺的都吸收在G项中
+        }
+
+        return Color3f(0.f);
+    }
+
+     //计算pdf
+    virtual float pdf(const Mesh* mesh, const EmitterQueryRecord &eRec) const override
+    {
+        float pdf__=0.f;
+        if(eRec.n.dot(-eRec.wi) >0.f) {
+            pdf__ = mesh->getDpdf()->getNormalization(); 
+        } 
+
+
+        return pdf__;
+    }
+
+
     virtual Color3f sample(EmitterQueryRecord & lRec, Sampler* sampler) const {
         //m_mesh shouldn't be null
         assert(m_mesh);
         
-		m_mesh->samplePosition(sampler->next2D(), lRec.p, lRec.n, sampler->next1D());
-
-		// fill in messages.
-		lRec.wi = (lRec.p - lRec.ref).normalized();
-		lRec.pdf = pdf(lRec);
-        lRec.emitter = this;
-		lRec.dist = (lRec.p - lRec.ref).norm();
-		
+		// m_mesh->samplePosition(sampler->next2D(), lRec.p, lRec.n, sampler->next1D());
+        SampleMeshResult res = m_mesh->sampleSurfaceUniform(sampler);
+        lRec.p = res.p;
+        lRec.n = res.n;
+        lRec.wi = (lRec.p - lRec.ref).normalized();
+        lRec.pdf = pdf(lRec);
+        lRec.dist = std::sqrt( (lRec.p - lRec.ref).squaredNorm() );
+		// fill 
 
 		if(!std::isnan(lRec.pdf) && lRec.pdf > 0.0f && std::abs(lRec.pdf) != std::numeric_limits<float>::infinity()) 
         {
@@ -51,19 +81,24 @@ public:
     //for consistency, we use solid angle measure and pre-multiply the cosThetaPrime term
 	virtual float pdf(const EmitterQueryRecord &lRec) const {
         assert(m_mesh);
+        float pdf_ = 0.0f;
 
-		float cosThetaPrime = std::max(0.f , lRec.n.dot(-lRec.wi));
+		float cosThetaPrime = std::abs(lRec.n.dot(-lRec.wi));
 
         //tranform pdf from area measure to solid angle measure    
         if(std::abs(cosThetaPrime)<1e-5f )
         {
             return 0.0f;
         }
-		float pdf_ = m_mesh->pdf() * std::pow(lRec.dist,2) / cosThetaPrime;
+
+		pdf_ = m_mesh->getDpdf()->getNormalization() * (lRec.p - lRec.ref).squaredNorm() / cosThetaPrime;
 		//erase irrational values
         if (isnan(pdf_) || fabsf(pdf_) == INFINITY)
-			return 0.0f;
-		return pdf_;
+			pdf_ = 0.f;
+	
+    
+    
+    	return pdf_;
     }
 
     void setParent(NoriObject *parent)

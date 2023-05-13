@@ -83,6 +83,9 @@ public:
     virtual Color3f sample(EmitterQueryRecord & lRec, Sampler* sampler) const=0;
     virtual float pdf(const EmitterQueryRecord &lRec)const = 0;
 
+    virtual float pdf(const Mesh* mesh, const EmitterQueryRecord &eRec) const {return 0.f;}    
+    virtual Color3f sample(const Mesh* mesh, EmitterQueryRecord &eRec, Sampler* &sample) const {return 0.f;}
+    virtual const Mesh* get_mesh()const{return m_mesh;}
     /**
      * \brief Return the type of object (i.e. Mesh/Emitter/etc.) 
      * provided by this instance
