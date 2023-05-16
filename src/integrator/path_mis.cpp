@@ -68,7 +68,7 @@ class PathMisIntegrator : public Integrator {
 
 		//sample indirect light
 		BSDFQueryRecord bQ(its.toLocal(-ray.d));
-		Color3f bsdf_cosTheta = its.mesh->getBSDF()->sample(bQ,sampler->next2D());
+		Color3f bsdf_cosTheta = its.mesh->getBSDF()->sample(bQ, sampler);
 		throughput *= bsdf_cosTheta;
 
 		if(bQ.measure == EDiscrete)

@@ -6,7 +6,7 @@
 
 #include <nori/bsdf.h>
 #include <nori/frame.h>
-
+#include<nori/sampler.h>
 NORI_NAMESPACE_BEGIN
 
 /// Ideal dielectric BSDF
@@ -31,6 +31,8 @@ public:
         /* Discrete BRDFs always evaluate to zero in Nori */
         return 0.0f;
     }
+
+    virtual Color3f sample(BSDFQueryRecord &bRec, Sampler* sampler) const { return sample(bRec,sampler->next2D()); }
 
     Color3f sample(BSDFQueryRecord &bRec, const Point2f &sample) const {
         bRec.measure = EDiscrete;

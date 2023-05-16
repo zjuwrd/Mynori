@@ -51,6 +51,9 @@ public:
         return INV_PI * Frame::cosTheta(bRec.wo);
     }
 
+    virtual Color3f sample(BSDFQueryRecord &bRec, Sampler* sampler) const { return sample(bRec,sampler->next2D()); }
+
+
     /// Draw a a sample from the BRDF model
     Color3f sample(BSDFQueryRecord &bRec, const Point2f &sample) const {
         if (Frame::cosTheta(bRec.wi) <= 0)

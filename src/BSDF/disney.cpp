@@ -10,6 +10,31 @@
 
 NORI_NAMESPACE_BEGIN
 
+static int check(float val)
+{
+    if(std::isnan(val))
+    {
+        std::cout<<"nan val"<<std::endl;
+        return 1;
+    }
+    if(std::isinf(val))
+    {
+        std::cout<<"inf val"<<std::endl;    
+        return 2;
+    }
+    return 0;
+}
+
+static int check(const Color3f& color)
+{
+    if( check(color[0]) || check(color[0]) ||check(color[0]) )
+    {
+        return 1;       
+    }
+    return 0;
+}
+
+
 class DisneyBRDF : public BSDF {
 public:
     DisneyBRDF(const PropertyList &propList)
@@ -19,12 +44,14 @@ public:
     metallic(propList.getFloat("metallic")),
     specular(propList.getFloat("specular")),
     specularTint(propList.getFloat("specularTint")),
-    anystropic(propList.getFloat("anystropic")),
+    anisotropic(propList.getFloat("anisotropic")),
     sheen(propList.getFloat("sheen")),
     sheenTint(propList.getFloat("sheenTint")),
     clearcoat_(propList.getFloat("clearcoat")),
     clearcoatGloss(propList.getFloat("clearcoatGloss"))
-    {}
+    {
+        std::cout<<"disney bsdf read."<<std::endl;
+    }
 
     virtual bool isDelta()const{return false;}
 
@@ -38,6 +65,8 @@ public:
         auto diffuse = DiffuseTerm(bRec.wi,bRec.wo,Normal3f(0.f,0.f,1.f));
         auto specular = SpecularTerm(bRec.wi,bRec.wo,Normal3f(0.f,0.f,1.f));
         auto clearcoat = ClearcoatTerm(bRec.wi,bRec.wo,Normal3f(0.f,0.f,1.f));
+
+       
         return diffuse*(1.f-metallic) + specular + clearcoat;
     
     
@@ -53,6 +82,8 @@ public:
         float pdf_specular = PdfSpecular(bRec.wi,bRec.wo);
         float pdf_clearcoat = PdfClearCoat(bRec.wi,bRec.wo);
         
+       
+
         const float diffuse_prob = std::min(0.8f, 1.f - metallic);
         const float clearcoat_prob = clearcoat_ / (2.f+clearcoat_);
         
@@ -83,8 +114,17 @@ public:
         
         float pdf_ = pdf(bRec);
 
-        if(pdf_ > 0.f)
-            return eval(bRec)*CosTheta / pdf_;
+
+
+        if(pdf_ <= 0.f)
+            return 0.f;
+
+        auto res = eval(bRec)*CosTheta / pdf_;
+       
+        
+        return eval(bRec)*CosTheta / pdf_;
+    
+    
     }
 
 
@@ -128,17 +168,17 @@ public:
         );
     }
 private:
-    float anystropic = 0.f; 
-    float sheen = 0.f;
-    float sheenTint = 0.f;
-    float clearcoatGloss = 0.f;
-    float clearcoat_ = 0.f;
-    float roughness=0.f;
-    float subsurface=0.f;
-    float metallic=0.f;
-    float specular=0.f;
-    float specularTint=0.f;
-    Color3f baseColor=0.f;
+    float anisotropic; 
+    float sheen;
+    float sheenTint;
+    float clearcoatGloss;
+    float clearcoat_ ;
+    float roughness;
+    float subsurface;
+    float metallic;
+    float specular;
+    float specularTint;
+    Color3f baseColor;
     //schlick's approximation for Fresnel
     static float SchlickFresnel(float CosTheta)
     {
@@ -215,7 +255,6 @@ private:
         const  float ss = res.second;
         const Color3f Cdlin = baseColor;
         
-        Color3f Cdlin = baseColor;
         float Cdlum = 0.3f*Cdlin.r() + 0.6*Cdlin.g() +0.1*Cdlin.b();
         Color3f Ctint = (Cdlum>0.f)?(Cdlin/Cdlum):Color3f(1.f);
         Color3f Csheen = (1.f-sheenTint)*Color3f(1.f)+sheenTint*Ctint;
@@ -232,7 +271,7 @@ private:
     Color3f SpecularTerm(const Vector3f& wi, const Vector3f& wo, const Normal3f& n)const
     {
         float alpha = roughness*roughness;
-        float aspect = std::sqrt(1.f-0.9f*anystropic);
+        float aspect = std::sqrt(1.f-0.9f*anisotropic);
         float alpha_x = std::max(0.001f, alpha/aspect);
         float alpha_y = std::max(0.001f, alpha*aspect);
         
@@ -283,6 +322,7 @@ private:
         /* Warp a uniformly distributed sample on [0,1]^2
            to a direction on a cosine-weighted hemisphere */
         Vector3f wo = Warp::squareToCosineHemisphere(sample);
+ 
 
         return wo;
     }
@@ -308,7 +348,7 @@ private:
         const float psi1 = sample[0];
         const float psi2 = sample[1];
         const float alpha = roughness*roughness;
-        const float aspect = std::sqrt(1.f-0.9f*anystropic);
+        const float aspect = std::sqrt(1.f-0.9f*anisotropic);
         const float alpha_x = std::max(0.001f, alpha/aspect);
         const float alpha_y = std::max(0.001f, alpha*aspect);
         
@@ -322,14 +362,16 @@ private:
         const float cos_thetaH = std::sqrt( (Omega_phiH*(1.f-psi2)) /( (1.f-Omega_phiH)*psi2 + Omega_phiH));
         const float sin_thetaH = std::sqrt( std::max(0.f, 1.f-cos_thetaH*cos_thetaH));
         
-        return Vector3f(cos_phiH*sin_thetaH, sin_phiH*sin_thetaH, cos_thetaH);
+        auto res = Vector3f(cos_phiH*sin_thetaH, sin_phiH*sin_thetaH, cos_thetaH);
+        
+        return res;
     
     }
 
     float PdfSpecular(const Vector3f& wi, const Vector3f& wo)const
     {
         const float alpha = roughness*roughness;
-        const float aspect = std::sqrt(1.f-0.9f*anystropic);
+        const float aspect = std::sqrt(1.f-0.9f*anisotropic);
         const float alpha_x = std::max(0.001f, alpha/aspect);
         const float alpha_y = std::max(0.001f, alpha*aspect);
         
@@ -349,10 +391,12 @@ private:
     {
         const float alpha = 0.1f*(1-clearcoatGloss) + 0.001f*clearcoatGloss;
         const float phi = 2.f*M_PI*sample[0];
-        const float CosTheta = std::sqrt( (std::pow(alpha,2.f-2*sample[1]) / (alpha*alpha - 1.f) ) );
+        const float CosTheta = std::sqrt( ( (std::pow(alpha,2.f-2*sample[1]) - 1.f) / (alpha*alpha - 1.f) ) );
         const float SinTheta = std::sqrt( std::max(0.f,1.f-CosTheta*CosTheta) );
 
-        return Vector3f(std::cos(phi)*SinTheta, std::sin(phi)*SinTheta, CosTheta);
+        auto res = Vector3f(std::cos(phi)*SinTheta, std::sin(phi)*SinTheta, CosTheta);
+        
+        return res;
     }
 
     float PdfClearCoat(const Vector3f& wi, const Vector3f& wo) const
