@@ -21,8 +21,12 @@ struct BSDFQueryRecord {
     /// Outgoing direction (in the local frame)
     Vector3f wo;
 
-    /// Relative refractive index in the sampled direction
+    ///(not clear?,donot use it, use IOR_i and IOR_o instead) Relative refractive index in the sampled direction 
     float eta;
+    /// @brief Relative refractive index in the incident direction
+    float IOR_i;
+    /// @brief Relative refractive index in the outgoing direction
+    float IOR_o;
 
     /// Measure associated with the sample
     EMeasure measure;
@@ -57,6 +61,8 @@ public:
      *         failed.
      */
     virtual Color3f sample(BSDFQueryRecord &bRec, const Point2f &sample) const = 0;
+
+    virtual Color3f sample(BSDFQueryRecord &bRec, Sampler* sampler) const { return sample(bRec,sampler->next2D()); }
 
     /**
      * \brief Evaluate the BSDF for a pair of directions and measure

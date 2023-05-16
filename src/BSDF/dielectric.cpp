@@ -48,14 +48,19 @@ public:
             if (Frame::cosTheta(bRec.wi) < 0.f) {//transmit from outside to inside
                 factor = m_intIOR / m_extIOR;
                 n = -n;
+                bRec.IOR_i = m_intIOR;
+                bRec.IOR_o = m_extIOR;
             }
             else{//transmit from inside to outside
                 factor = m_extIOR / m_intIOR;
+                bRec.IOR_i = m_extIOR;
+                bRec.IOR_o = m_intIOR;
             }
             
             
             bRec.wo = refract(bRec.wi, n, factor);
             bRec.eta = m_intIOR / m_extIOR;
+            
             return Color3f(1.0f);
         }
 
@@ -79,7 +84,7 @@ static Vector3f refract(const Vector3f& wi, const Vector3f& n, float eta)
     float sin2ThetaI = std::max(0.0f, 1.0f - cosThetaI * cosThetaI);
     float sin2ThetaT = eta * eta * sin2ThetaI;
     if (sin2ThetaT >= 1.0f) // full reflection
-        return Vector3f(0, 0, 0);
+        return Vector3f(-wi[0], -wi[1], wi[2]);
     float cosThetaT = std::sqrt(1.0f - sin2ThetaT);
     if(cosThetaI > 0.f) cosThetaT = -cosThetaT;
     return eta * -wi + (eta * cosThetaI + cosThetaT) * n;

@@ -68,8 +68,12 @@ add_executable(nori
   include/nori/transform.h
   include/nori/vector.h
   include/nori/warp.h
+  src/integrator/PhotonMap/photon.hpp
+  src/integrator/PhotonMap/photonmap.hpp
 
   # Source code files
+  src/integrator/PhotonMap/photonmap.cpp
+  src/integrator/PM.cpp
   src/integrator/path_mis.cpp
   src/integrator/path_ems.cpp
   src/integrator/path_mats.cpp
@@ -83,6 +87,7 @@ add_executable(nori
   src/BSDF/microfacet.cpp
   src/BSDF/mirror.cpp
   src/BSDF/dielectric.cpp
+  src/BSDF/disney.cpp
 
   src/accelerate/bvh.cpp
   src/accelerate/accel.cpp
