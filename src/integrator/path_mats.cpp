@@ -14,7 +14,7 @@ class PathMats : public Integrator {
     Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray_)const{
     #if 1
         constexpr uint32_t MinDepth = 5;
-        constexpr uint32_t MaxDepth = 100;
+        constexpr uint32_t MaxDepth = 1000;
         Color3f throughput(1.0f);
         Color3f L(0.0f);
         Ray3f ray(ray_);

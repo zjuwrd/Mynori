@@ -25,8 +25,8 @@ Mesh::~Mesh() {
 
 SampleMeshResult Mesh::sampleSurfaceUniform(Sampler* sampler) const {
     SampleMeshResult res;
-    uint32_t idx = m_dpdf->sample(sampler->next1D());//网格中用inversion method采样一个三角形
-    Point2f zeta = sampler->next2D();//三角形中采样随机点，用重心坐标方法
+    uint32_t idx = m_dpdf->sample(sampler->next1D());
+    Point2f zeta = sampler->next2D();
     float alpha = 1 - sqrt(1 - zeta.x());
     float beta = zeta.y() * sqrt(1 - zeta.x());
     Point3f v0 = m_V.col(m_F(0, idx));
@@ -34,18 +34,18 @@ SampleMeshResult Mesh::sampleSurfaceUniform(Sampler* sampler) const {
     Point3f v2 = m_V.col(m_F(2, idx));
     res.p = v0 * alpha + v1 * beta + v2 * (1 - alpha - beta);
 
-    if (m_N.size() != 0) {//如果有顶点法线，用重心坐标插值
+    if (m_N.size() != 0) {
         Point3f n0 = m_N.col(m_F(0, idx));
         Point3f n1 = m_N.col(m_F(1, idx));
         Point3f n2 = m_N.col(m_F(2, idx));
         res.n = (alpha * n0 + beta * n1 + (1 - alpha - beta) * n2).normalized();
-    } else {//否则用表面插乘，此时假设三角形面完全平坦，所以精度低
+    } else {
         Vector3f e1 = v1 - v0;
         Vector3f e2 = v2 - v0;
         res.n = e1.cross(e2).normalized();
     }
 
-    res.pdf = (float)1 / m_area;//面积分之一，如果用dpdf的归一化因子也是一样的，但看起来不太直观
+    res.pdf = (float)1 / m_area;
     
     return res;
 }
