@@ -8,8 +8,12 @@
 
 #include"photon/photon.hpp"
 #include<tbb/tbb.h>
+#include<thread>
 #include<memory>
 
+#define USE_TBB
+
+extern int threadCount;
 
 
 NORI_NAMESPACE_BEGIN
@@ -35,8 +39,8 @@ class PM:public Integrator
         Timer timer;    
 
         std::cout<<"Generating photons..."<<std::endl;
-        Sampler *sampler = static_cast<Sampler *>(
-            NoriObjectFactory::createInstance("independent", PropertyList()));
+        std::unique_ptr<Sampler> Global_sampler(static_cast<Sampler *>(
+            NoriObjectFactory::createInstance("independent", PropertyList())));
 
         m_photonmap = std::make_unique<PhotonMap>();
         m_photonmap->reserve(m_photoncount);
@@ -49,89 +53,94 @@ class PM:public Integrator
 
         int shoot_cnt=0;
 
+#ifdef USE_TBB
         tbb::mutex pm_mutex;
-
-        shoot_cnt = tbb::parallel_reduce(tbb::blocked_range<size_t>(0,m_photoncount),0,
-        [&](const tbb::blocked_range<size_t>& r,int shoot_cnt)->int
-        {
-            Sampler* sampler = static_cast<Sampler *>(
-            NoriObjectFactory::createInstance("independent", PropertyList()));
-
-            int local_shoot_count = 0;
-
-            for(size_t photon_cnt=r.begin();photon_cnt < r.end(); )
-            {
-                const Mesh* emissiveMesh = scene->SampleLight(sampler->next1D());
-                const Emitter* emitter = emissiveMesh->getEmitter();
-
-
-                PhotonRay res = emitter->ShootPhoton(sampler);
-
-                if(res.success && !res.flux.isZero())
+        
+        std::thread PhotonThread(
+        [&]{
+                tbb::task_scheduler_init init(threadCount);
+                shoot_cnt = tbb::parallel_reduce(tbb::blocked_range<size_t>(0,m_photoncount),0,
+                [&](const tbb::blocked_range<size_t>& r,int init)->int
                 {
-                    ++local_shoot_count;
-                    Ray3f ray(res.ray);
-                    Color3f flux(res.flux);
-                    Intersection its;
-                    int depth = 0;
-                    Color3f throughput=1.f;
-                
-                    while((depth<MaxDepth) && photon_cnt < m_photoncount && scene->rayIntersect(ray,its))
+                    
+                    int local_shoot_count = 0;
+                    const size_t local_photon_cnt = r.end()-r.begin();
+
+                    std::unique_ptr<Sampler> sampler = Global_sampler->newClone();
+
+                    // std::cout<<"thread "<<r.begin() <<" shooting "<<local_photon_cnt<<" photons"<<std::endl;
+
+
+                    for(size_t photon_cnt= 0 ;photon_cnt < local_photon_cnt; )
                     {
-                        const BSDF* bsdf = its.mesh->getBSDF();
-                        if(bsdf->isDiffuse())
+                        const Mesh* emissiveMesh = scene->SampleLight(sampler->next1D());
+                        const Emitter* emitter = emissiveMesh->getEmitter();
+
+                        PhotonRay res = emitter->ShootPhoton(sampler.get());
+
+                        if(res.success && !res.flux.isZero())
                         {
-
-
-                            //mutex on m_phtonmap
+                            ++local_shoot_count;
+                            Ray3f ray(res.ray);
+                            Color3f flux(res.flux);
+                            Intersection its;
+                            int depth = 0;
+                            Color3f throughput=1.f;
+                        
+                            while((depth<MaxDepth) && photon_cnt < local_photon_cnt && scene->rayIntersect(ray,its))
                             {
-                                tbb::mutex::scoped_lock lock(pm_mutex);
+                                const BSDF* bsdf = its.mesh->getBSDF();
+                                if(bsdf->isDiffuse())
+                                {
 
-                                m_photonmap->push_back(Photon(its.p, ray.d, throughput * flux));
+                                    //mutex on m_phtonmap
+                                    {
+                                        tbb::mutex::scoped_lock lock(pm_mutex);
+                                        m_photonmap->push_back(Photon(its.p, ray.d, throughput * flux));                                
+                                        lock.release();
+                                    }
+                                    
+                                    ++photon_cnt;
+                                }
+
+                                BSDFQueryRecord bQ(its.toLocal(-ray.d));
+
+                                Color3f fr = bsdf->sample(bQ,sampler.get());
                                 
-                                lock.release();
+                                Vector3f newdir = its.toWorld(bQ.wo);
+
+                                throughput *= fr;
+
+                                //Russian roullete
+                                if(depth>Mindepth)
+                                {
+                                    float p = std::min(0.99f, throughput.maxCoeff());
+                                    
+                                    if(sampler->next1D() > p)
+                                    {
+                                        break;
+                                    }                                
+                                
+                                    throughput /= p;
+                                }   
+                                ++depth;
+                                ray = Ray3f(its.p,newdir,Epsilon,INFINITY);
                             }
-
-
-                            
-                            ++photon_cnt;
                         }
-
-                        BSDFQueryRecord bQ(its.toLocal(-ray.d));
-                        Color3f fr = bsdf->sample(bQ,sampler);
-
-                        Vector3f newdir = its.toWorld(bQ.wo);
-
-                        throughput *= fr;
-
-                        //Russian roullete
-                        if(depth>Mindepth)
-                        {
-                            float p = std::min(0.99f, throughput.maxCoeff());
-                            if(sampler->next1D() > p)
-                            {
-                                break;
-                            }
-                            throughput /= p;
-                        }   
-                        ++depth;
-                        ray = Ray3f(its.p,newdir,Epsilon,INFINITY);
                     }
-                }
+                
+                    return init+local_shoot_count;
+                
+                },[&](int x, int y)->int
+                {
+                    return x+y;
+                });
             }
-        
-            return local_shoot_count;
-        
-        },[&](int x, int y)->int
-        {
-            return x+y;
-        });
+        );
 
-
-
-
-
-#if 0
+    PhotonThread.join();
+#else 
+    const auto sampler = Global_sampler;
         for(int photon_cnt=0;photon_cnt<m_photoncount;)
         {
             const Mesh* emissiveMesh = scene->SampleLight(sampler->next1D());
@@ -190,7 +199,8 @@ class PM:public Integrator
 #endif
 
         std::cout<<"done. time elased "<<timer.elapsedString()<<"." <<std::endl;
-        
+        std::cout<<"collected photons / shooted photons = "<<m_photonmap->size()<<"/"<<shoot_cnt<<std::endl;
+
         timer.reset();
         std::cout<<"building photon map ..."<<std::endl;
 

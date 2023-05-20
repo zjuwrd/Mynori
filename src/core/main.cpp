@@ -21,7 +21,7 @@
 
 using namespace nori;
 
-static int threadCount = -1;
+int threadCount = -1;
 static bool gui = true;
 
 static void renderBlock(const Scene *scene, Sampler *sampler, ImageBlock &block) {

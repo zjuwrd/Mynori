@@ -55,6 +55,8 @@ public:
     /// Create an exact clone of the current instance
     virtual std::unique_ptr<Sampler> clone() const = 0;
 
+    virtual std::unique_ptr<Sampler> newClone() const {return nullptr;}
+
     /**
      * \brief Prepare to render a new image block
      * 

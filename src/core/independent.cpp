@@ -8,6 +8,8 @@
 #include <nori/block.h>
 #include <pcg32.h>
 
+#include <random>
+
 NORI_NAMESPACE_BEGIN
 
 /**
@@ -30,6 +32,15 @@ public:
         std::unique_ptr<Independent> cloned(new Independent());
         cloned->m_sampleCount = m_sampleCount;
         cloned->m_random = m_random;
+        return std::move(cloned);
+    }
+
+    std::unique_ptr<Sampler> newClone() const 
+    {
+        std::random_device rrd;
+        std::unique_ptr<Independent> cloned(new Independent());
+        cloned->m_sampleCount = m_sampleCount;
+        cloned->m_random.seed(rrd());
         return std::move(cloned);
     }
 
