@@ -29,23 +29,21 @@ public:
     }
 
 
-    //生成采样点
     virtual Color3f sample(const Mesh* mesh, EmitterQueryRecord &eRec, Sampler* &sample) const override
     {
         SampleMeshResult point = mesh->sampleSurfaceUniform(sample);
         eRec.p = point.p;
         eRec.n = point.n;
         eRec.wi = (eRec.p - eRec.ref).normalized();
-        eRec.pdf = pdf(mesh, eRec);//光源面积pdf
+        eRec.pdf = pdf(mesh, eRec);
 
         if(eRec.pdf > 0.0f && !std::isnan(eRec.pdf) && !std::isinf(eRec.pdf)) {
-            return eval(eRec) / eRec.pdf;//这里没有cos项，缺的都吸收在G项中
+            return eval(eRec) / eRec.pdf;
         }
 
         return Color3f(0.f);
     }
 
-     //计算pdf
     virtual float pdf(const Mesh* mesh, const EmitterQueryRecord &eRec) const override
     {
         float pdf__=0.f;
@@ -108,6 +106,18 @@ public:
 			m_mesh = static_cast<Mesh*>(parent);
 	}
 
+    virtual PhotonRay ShootPhoton(Sampler* sampler)const{
+        const auto res = m_mesh->sampleSurfaceUniform(sampler);
+        Vector3f dir_local = Warp::squareToCosineHemisphere(sampler->next2D());
+        Frame frame(res.n);
+        Vector3f dir_world = frame.toWorld(dir_local);
+
+        Ray3f ray = Ray3f(res.p,dir_world,Epsilon,INFINITY);
+        Color3f flux = M_PI * m_mesh->totalArea() * m_radiance;
+
+        return PhotonRay(ray,flux);
+
+    }
 
 	
 

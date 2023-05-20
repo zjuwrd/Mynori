@@ -35,6 +35,8 @@ public:
     virtual Color3f sample(BSDFQueryRecord &bRec, Sampler* sampler) const { return sample(bRec,sampler->next2D()); }
 
     Color3f sample(BSDFQueryRecord &bRec, const Point2f &sample) const {
+        
+        #if 1
         bRec.measure = EDiscrete;
         float cosThetaI = Frame::cosTheta(bRec.wi);
         float kr = fresnel(cosThetaI, m_extIOR, m_intIOR);
@@ -65,7 +67,7 @@ public:
             
             return Color3f(1.0f);
         }
-
+        #endif
 
     }
 

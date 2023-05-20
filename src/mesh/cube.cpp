@@ -20,9 +20,11 @@ class Cube: public Mesh
             const uint32_t m_vertex_count = 24;
 
             m_V.resize(3,m_vertex_count);
-            m_F.resize(3,m_face_count);
+            m_N.resize(3,m_vertex_count);
             m_UV.resize(2,m_vertex_count);
-
+            m_F.resize(3,m_face_count);
+            
+            
 
             std::vector<Point3f> vertices={
                 {  1, -1, -1 }, {  1, -1,  1 }, { -1, -1,  1 }, { -1, -1, -1 },
@@ -78,6 +80,13 @@ class Cube: public Mesh
 
             }            
 
+            for(uint32_t i=0;i<m_face_count;++i)
+            {
+                const auto& f = triangles[i];
+                m_F.col(i) = f.cast<uint32_t>();
+            }
+
+
 
             cout <<m_name<<" loading..."
                 << "done. (V=" << m_V.cols() << ", F=" << m_F.cols() << ", took "
@@ -96,5 +105,6 @@ class Cube: public Mesh
 
 };
 
+NORI_REGISTER_CLASS(Cube, "cube")
 
 NORI_NAMESPACE_END

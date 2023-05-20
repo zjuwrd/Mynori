@@ -62,6 +62,18 @@ struct EmitterQueryRecord
 
 };
 
+struct PhotonRay
+{
+    Ray3f ray;
+    Color3f flux;
+    bool success=false;
+
+    PhotonRay() = default;
+    PhotonRay(const Ray3f& ray, const Color3f flux):ray(ray), flux(flux){
+        success = true;
+    }
+
+};
 
 
 class Emitter : public NoriObject {
@@ -92,6 +104,10 @@ public:
      * */
     EClassType getClassType() const { return EEmitter; }
 
+
+    virtual PhotonRay ShootPhoton(Sampler* sampler) const {
+        return PhotonRay();
+    }
 
     
 };

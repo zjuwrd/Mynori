@@ -69,18 +69,20 @@ add_executable(nori
   include/nori/transform.h
   include/nori/vector.h
   include/nori/warp.h
-  src/integrator/PhotonMap/photon.hpp
-  src/integrator/PhotonMap/photonmap.hpp
+  include/nori/kdtree.h
 
+  src/integrator/photon/photon.hpp
   src/medium/phasefunction.hpp
   
   
   # Source code files
+  
+  src/integrator/photon/photon.cpp
+
   src/mesh/cube.cpp
   src/mesh/rectangle.cpp
   src/medium/homogeneous.cpp
 
-  src/integrator/PhotonMap/photonmap.cpp
   src/integrator/PM.cpp
   src/integrator/path_mis.cpp
   src/integrator/path_ems.cpp
