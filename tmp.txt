@@ -1,0 +1,18 @@
+        uint32_t SampleJ(const float psi, float& pmf )
+        {
+            const float k_regular = std::pow(init_k+0.f,alpha-1.f);
+            float n = init_k + std::pow(k_regular*(1.f-psi),1.f/(alpha-1.f));
+
+            uint32_t n1 = uint32_t(std::max(0.f, std::floor(n)));
+            uint32_t n2 = n1+1;
+
+            float alpha_pmf = (std::pow( float(n1),alpha-1.f) - std::pow( float(n2),alpha-1.f))/k_regular;
+            if(alpha_pmf<=0.f)
+            {
+                alpha_pmf =1.f;
+            }
+
+            pmf = alpha_pmf;
+
+            return n1;
+        }

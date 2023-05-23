@@ -87,6 +87,8 @@ public:
      */
     void put(ImageBlock &b);
 
+    void weighted_put(ImageBlock &b, const float wieght);
+
     /// Lock the image block (using an internal mutex)
     inline void lock() const { m_mutex.lock(); }
     

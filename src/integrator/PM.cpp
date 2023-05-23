@@ -27,7 +27,7 @@ class PM:public Integrator
     PM(const PropertyList &props)
     {
         m_photoncount = props.getInteger("photoncount",10000);
-        m_radius = props.getFloat("radius",-1.f);
+        m_radius = props.getFloat("radius",  -1.f );
     }
 
     //shooting photons
@@ -48,7 +48,7 @@ class PM:public Integrator
 
         if(m_radius<0.f)
         {
-            m_radius = scene->getBoundingBox().getExtents().norm() / 500.f;
+            m_radius = 10000*scene->getBoundingBox().getExtents().norm() / m_photoncount;
         }
 
         int shoot_cnt=0;
@@ -213,7 +213,7 @@ class PM:public Integrator
     }
 
 
-    Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray_) const {
+    virtual Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray_) const override {
         constexpr int Mindepth = 3;
         constexpr int Maxdepth = 100;
 

@@ -224,10 +224,13 @@ public:
             return;
         }
 
+        // omit the redundant message
+        #if 1
         cout << "Building a " << Dimension << "-dimensional kd-tree over "
              << m_nodes.size() << " data points ("
              << memString(m_nodes.size() * sizeof(NodeType)).c_str() << ") .. ";
         cout.flush();
+        #endif
 
         if (recomputeBoundingBox) {
             m_bbox.reset();

@@ -70,19 +70,18 @@ add_executable(nori
   include/nori/vector.h
   include/nori/warp.h
   include/nori/kdtree.h
-
   src/integrator/photon/photon.hpp
   src/medium/phasefunction.hpp
   
   
   # Source code files
-  
-  src/integrator/photon/photon.cpp
 
+  src/integrator/debiasedPM.cpp
+  src/integrator/SPPM.cpp
+  src/integrator/photon/photon.cpp
   src/mesh/cube.cpp
   src/mesh/rectangle.cpp
   src/medium/homogeneous.cpp
-
   src/integrator/PM.cpp
   src/integrator/path_mis.cpp
   src/integrator/path_ems.cpp
@@ -90,20 +89,15 @@ add_executable(nori
   src/integrator/whitted.cpp
   src/integrator/ao.cpp
   src/integrator/simple.cpp
-  
   src/light/area.cpp
-
   src/BSDF/diffuse.cpp
   src/BSDF/microfacet.cpp
   src/BSDF/mirror.cpp
   src/BSDF/dielectric.cpp
   src/BSDF/disney.cpp
-
   src/accelerate/bvh.cpp
   src/accelerate/accel.cpp
-
   src/distribute/warp.cpp
-  
   src/core/normals.cpp
   src/core/bitmap.cpp
   src/core/block.cpp

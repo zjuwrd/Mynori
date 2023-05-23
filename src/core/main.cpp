@@ -69,6 +69,8 @@ static void render(Scene *scene, const std::string &filename) {
 
     /* Create a window that visualizes the partially rendered result */
     NoriScreen *screen = nullptr;
+    std::vector<NoriScreen*> extra_screens(2);
+    
     if (gui) {
         nanogui::init();
         screen = new NoriScreen(result);
@@ -109,8 +111,19 @@ static void render(Scene *scene, const std::string &filename) {
             }
         };
 
-        /// Default: parallel rendering
-        tbb::parallel_for(range, map);
+
+        if(scene->getIntegrator()->HasRenderMethod())
+        {
+            /// Use the integer's own render method if i exists. 
+            Integrator* intergator = scene->getIntegrator();
+            intergator->preprocess(scene);
+            intergator->render(scene,result,extra_screens);
+        }
+        else
+        {
+            /// Default: parallel rendering
+            tbb::parallel_for(range, map);
+        }
 
         /// (equivalent to the following single-threaded call)
         // map(range);
@@ -127,6 +140,8 @@ static void render(Scene *scene, const std::string &filename) {
 
     if (gui) {
         delete screen;
+        for(int i=0;i<extra_screens.size();i++)
+            delete extra_screens[i];
         nanogui::shutdown();
     }
 

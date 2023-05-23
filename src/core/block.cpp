@@ -101,6 +101,26 @@ void ImageBlock::put(ImageBlock &b) {
         += b.topLeftCorner(size.y(), size.x());
 }
 
+void ImageBlock::weighted_put(ImageBlock &b, const float weight)
+{
+    Vector2i offset = b.getOffset() - m_offset +
+        Vector2i::Constant(m_borderSize - b.getBorderSize());
+    Vector2i size   = b.getSize()   + Vector2i(2*b.getBorderSize());
+
+    tbb::mutex::scoped_lock lock(m_mutex);
+
+    for(uint32_t y=0;y<size.y();++y)
+        for(uint32_t x=0;x<size.x();++x)
+        {
+            coeffRef(x+offset.x(),y+offset.y()) = (1.f-weight)*coeffRef(x+offset.x(),y+offset.y()) 
+                                                + weight * b.topLeftCorner(size.x(),size.y())(x,y);
+        }
+
+}
+
+
+
+
 std::string ImageBlock::toString() const {
     return tfm::format("ImageBlock[offset=%s, size=%s]]",
         m_offset.toString(), m_size.toString());

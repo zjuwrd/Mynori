@@ -2,10 +2,24 @@
     <?xml version='1.0' encoding='utf-8'?>
 
 <scene>
-	<integrator type="PhotonMapping">
-		<integer name="photoncount" value="10000000"/>
-		<!-- <float name="radius" value="0.05"/> -->
+	
+	<integrator type = "debiasedpm">
+		<float name="radius" value="0.02"/>
+		<integer name="k" value="10"/>
 	</integrator>
+
+	<!-- <integrator type="sppm">
+		<integer name="PhotonCount" value="1000000"/>
+		<float name="radius" value="0.1" />
+		<integer name="Iterations" value="100" />
+	</integrator> -->
+
+	<!-- <integrator type="PhotonMapping">
+		<integer name="photoncount" value="50000000"/>
+		<float name="radius" value="0.001"/>
+	</integrator> -->
+
+
 
     <camera type="perspective" >
 		<float name="fov" value="19.5" />
@@ -21,7 +35,7 @@
 
 
 	<sampler type="independent">
-		<integer name="sampleCount" value="1024"/>
+		<integer name="sampleCount" value="128"/>
 	</sampler>
 
 	
@@ -118,6 +132,19 @@
 			<color name="radiance" value="540000.1127, 380000.1972, 120000.7324"/>
 		</emitter>
 	</mesh>
+
+	<!-- <mesh type="rectangle" >
+		<transform name="toWorld" >
+			<matrix value="-0.0025 1.91069e-015 -4.37114e-008 -0.005 2.18557e-010 2.18557e-008 -0.5 1.98 0 -0.002 -8.74228e-011 -0.03 0 0 0 1"/>
+		</transform>
+		
+		<emitter type="area" >
+			<color name="radiance" value="541127, 381972, 127324"/>
+		</emitter>
+	</mesh> -->
+	
+
+
 
 	<!-- water1 -->
     <mesh type="obj" >

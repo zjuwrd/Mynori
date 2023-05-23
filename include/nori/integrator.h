@@ -27,6 +27,11 @@ public:
     /// Perform an (optional) preprocess step
     virtual void preprocess(const Scene *scene) { }
 
+    /// @brief Progressive rendering (optional)
+    virtual void render(const Scene* scene,ImageBlock& image, std::vector<NoriScreen*>& screens){}
+
+    virtual bool HasRenderMethod()const{return false;}
+
     /**
      * \brief Sample the incident radiance along a ray
      *
