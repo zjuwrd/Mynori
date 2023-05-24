@@ -26,9 +26,12 @@ public:
 
     /// Perform an (optional) preprocess step
     virtual void preprocess(const Scene *scene) { }
+    
+    virtual void postprocess(const Scene *scene, ImageBlock &block) {}
 
-    /// @brief Progressive rendering (optional)
-    virtual void render(const Scene* scene,ImageBlock& image, std::vector<NoriScreen*>& screens){}
+    /// @brief rendering (optional)
+    virtual void render(const Scene* scene,ImageBlock& image, std::vector<NoriScreen*>& screens){render(scene, image);}
+    virtual void render(const Scene* scene,ImageBlock& image){}
 
     virtual bool HasRenderMethod()const{return false;}
 
@@ -45,7 +48,6 @@ public:
      *    A (usually) unbiased estimate of the radiance in this direction
      */
     virtual Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const = 0;
-
     /**
      * \brief Return the type of object (i.e. Mesh/BSDF/etc.) 
      * provided by this instance

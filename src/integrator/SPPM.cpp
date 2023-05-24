@@ -69,11 +69,12 @@ class SPPM: public Integrator
 
             for(int i=0;i<m_iteration; ++i)
             {
-                image.clear();
+                // image.clear();
                 if(i%10 == 0)
                     std::cout<<"iteraion["<<i+1<<"]"<<" begin."<<std::endl; 
                 
                 ShootPass(scene);
+                std::cout<<"total emitted photons="<<m_emittedcount <<std::endl;
                 CapturePass(scene,image);
                 if(i%10 == 0)
                     std::cout<<"iteration["<<i+1<<"]"<<" ends."<<std::endl;
@@ -206,10 +207,10 @@ class SPPM: public Integrator
                         float rate = (float)(msg.photon_count + alpha * res.size()) / (msg.photon_count + res.size());
                         msg.radius *= std::sqrt(rate);
                         msg.photon_count += res.size() *alpha;
-                        msg.flux = (msg.flux + Lp) * rate ;
+                        msg.flux = (msg.flux + Lp) * rate * throughput;
                     }
 
-                    L += throughput * msg.flux / (M_PI * msg.radius * msg.radius * m_emittedcount);
+                    L += msg.flux / (M_PI * msg.radius * msg.radius * m_emittedcount);
                     break;
                 }
 
@@ -344,7 +345,7 @@ class SPPM: public Integrator
 
             int shoot_cnt=0;
 
-#ifdef USE_TBB
+#if 1
             // mutex for photonmap
             tbb::mutex pm_mutex;
             //thread for shooting photons
@@ -380,14 +381,12 @@ class SPPM: public Integrator
                                     const BSDF* bsdf = its.mesh->getBSDF();
                                     if(bsdf->isDiffuse())
                                     {
-
                                         //mutex on m_phtonmap
                                         {
                                             tbb::mutex::scoped_lock lock(pm_mutex);
                                             m_photonmap->push_back(Photon(its.p, ray.d, throughput * flux));                                
                                             lock.release();
                                         }
-                                        
                                         ++photon_cnt;
                                     }
 

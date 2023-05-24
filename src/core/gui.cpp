@@ -15,9 +15,9 @@
 
 NORI_NAMESPACE_BEGIN
 
-NoriScreen::NoriScreen(const ImageBlock &block)
+NoriScreen::NoriScreen(const ImageBlock &block,std::string title)
  : nanogui::Screen(nanogui::Vector2i(block.getSize().x(), block.getSize().y() + 36),
-                   "Nori", false),
+                   title, false),
    m_block(block) {
     using namespace nanogui;
     inc_ref();

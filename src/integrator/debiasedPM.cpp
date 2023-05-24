@@ -169,7 +169,7 @@ class DebiasedPM: public Integrator
             KImg = std::make_unique<ImageBlock>(scene->getCamera()->getOutputSize(),scene->getCamera()->getReconstructionFilter());
             KImg->clear();
             BlockGenerator KblockGen(outputSize, NORI_BLOCK_SIZE);
-            NoriScreen* Kscreen = new NoriScreen(*KImg);
+            NoriScreen* Kscreen = new NoriScreen(*KImg, "BiasedPM_K");
             screens.push_back(Kscreen);
 
 

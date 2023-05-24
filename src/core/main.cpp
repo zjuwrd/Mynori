@@ -116,13 +116,15 @@ static void render(Scene *scene, const std::string &filename) {
         {
             /// Use the integer's own render method if i exists. 
             Integrator* intergator = scene->getIntegrator();
-            intergator->preprocess(scene);
             intergator->render(scene,result,extra_screens);
         }
         else
         {
             /// Default: parallel rendering
             tbb::parallel_for(range, map);
+            // map(range);
+            Integrator* integrator = scene->getIntegrator();
+            integrator->postprocess(scene,result);
         }
 
         /// (equivalent to the following single-threaded call)
@@ -137,6 +139,8 @@ static void render(Scene *scene, const std::string &filename) {
 
     /* Shut down the user interface */
     render_thread.join();
+
+    
 
     if (gui) {
         delete screen;
