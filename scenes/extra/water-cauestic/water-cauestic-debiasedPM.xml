@@ -2,16 +2,7 @@
     <?xml version='1.0' encoding='utf-8'?>
 
 <scene>
-	
-
-	<!-- <integrator type = "sppm">
-		<float name="radius" value="0.02"/>
-		<integer name="iteration" value="80"/>
-		<float name="alpha" value="0.3" />
-		<integer name="photonCount" value="5000000"/>
-	</integrator> -->
-	
-
+		
 	<integrator type = "debiasedpm">
 		<float name="radius" value="0.05"/>
 		<integer name="photonsunit" value="200000" />
@@ -19,19 +10,6 @@
 		<integer name="iterations" value="10" />
 	</integrator>
 	
-
-	<!-- <integrator type="sppm">
-		<integer name="PhotonCount" value="1000000"/>
-		<float name="radius" value="0.1" />
-		<integer name="Iterations" value="100" />
-	</integrator> -->
-
-	<!-- <integrator type="PhotonMapping">
-		<integer name="photoncount" value="21801058"/>
-		<float name="radius" value="0.001"/>
-	</integrator> -->
-
-
 
     <camera type="perspective" >
 		<float name="fov" value="19.5" />
@@ -157,18 +135,6 @@
             <float name="extIOR" value="1" />
         </bsdf>
 	</mesh>
-
-	<!-- water2 -->
-	<!-- <mesh type="obj" >
-		<string name="filename" value="models/Mesh000.obj" />
-		<transform name="toWorld" >
-			<matrix value="1 0 0 0 0 1.5 0 0 0 0 1 0 0 0 0 1"/>
-		</transform>
-		<bsdf type="dielectric" >
-            <float name="intIOR" value="1.8" />
-            <float name="extIOR" value="1" />
-        </bsdf>
-	</mesh> -->
 
 
 </scene>

@@ -20,7 +20,7 @@ extern int threadCount;
 
 NORI_NAMESPACE_BEGIN
 
-class DebiasedPM: public Integrator
+class DebiasedPPM: public Integrator
 {
     struct EstimateRes
     {
@@ -33,9 +33,9 @@ class DebiasedPM: public Integrator
     using PhotonMap = PointKDTree<Photon>;
 
     public:
-        DebiasedPM(const PropertyList &props)
+        DebiasedPPM(const PropertyList &props)
         {
-            init_k = props.getInteger("k",1);
+            init_k = props.getInteger("initk",1);
             init_Rad = props.getFloat("radius",0.2f);
             iterations = props.getInteger("iterations",1);
             PhotonsUnit = props.getInteger("photonsunit",100000);
@@ -128,9 +128,8 @@ class DebiasedPM: public Integrator
 
         virtual void render(const Scene* scene, ImageBlock& image, std::vector<NoriScreen*>& screens) override
         {
-            std::unique_ptr<Sampler> Global_sampler(static_cast<Sampler *>(
-                NoriObjectFactory::createInstance("independent", PropertyList())));
-
+            std::unique_ptr<Sampler> sampler = scene->getSampler()->newClone();
+            
             KImg = std::make_unique<ImageBlock>(scene->getCamera()->getOutputSize(),scene->getCamera()->getReconstructionFilter());
             KImg->clear();
             NoriScreen* Kscreen = new NoriScreen(*KImg, "BiasedPM_K");
@@ -139,10 +138,10 @@ class DebiasedPM: public Integrator
             for(int i=0;i<iterations;++i)
             {
                 float alpha_pmf =0.f;
-                const uint32_t j0 = SampleJ(Global_sampler->next1D(), alpha_pmf);
+                const uint32_t k = init_k+i;
+                const uint32_t j0 = SampleJ(k, sampler->next1D(), alpha_pmf);
                 const uint32_t j1 = j0+1;
-                const uint32_t k = init_k;
-
+                
                 std::cout<<"iteration "<<i+1<<" starts."<<std::endl;
 
                 std::cout<<"j="<<j0<<std::endl;
@@ -151,7 +150,7 @@ class DebiasedPM: public Integrator
 
                 rad0 = init_Rad * std::pow(float(j0),(alpha-1.f)/2.f);
                 rad1 = init_Rad * std::pow(float(j1),(alpha-1.f)/2.f);
-                radk = init_Rad * std::pow(float(init_k),(alpha-1.f)/2.f);
+                radk = init_Rad * std::pow(float(k),(alpha-1.f)/2.f);
                 std::cout<<"\nrad0="<<rad0<<std::endl;
                 std::cout<<"rad1="<<rad1<<std::endl;
                 std::cout<<"radk="<<radk<<std::endl;
@@ -166,7 +165,7 @@ class DebiasedPM: public Integrator
         }
 
         virtual std::string toString()const{
-            return "DebiasedPM[]";
+            return "DebiasedPPM[]";
         }
 
 
@@ -188,32 +187,13 @@ class DebiasedPM: public Integrator
 
             BlockGenerator KblockGen(outputSize, NORI_BLOCK_SIZE);
             
-
-            // PosDeltaImg = std::make_unique<ImageBlock>(scene->getCamera()->getOutputSize(),scene->getCamera()->getReconstructionFilter());
-            // PosDeltaImg->clear();
-            // BlockGenerator PosDeltablockGen(outputSize, NORI_BLOCK_SIZE);
-            // NoriScreen* PosDeltascreen = new NoriScreen(*PosDeltaImg);
-            // screens.push_back(PosDeltascreen);
-
-            // NegDeltaImg = std::make_unique<ImageBlock>(scene->getCamera()->getOutputSize(),scene->getCamera()->getReconstructionFilter());
-            // NegDeltaImg->clear();
-            // BlockGenerator NegDeltablockGen(outputSize, NORI_BLOCK_SIZE);
-            // NoriScreen* NegDeltascreen = new NoriScreen(*NegDeltaImg);
-            // screens.push_back(NegDeltascreen);
-
-
-
-
             m_radius = init_Rad;
 
             auto map= [&](const tbb::blocked_range<int>& range)
             {
                 //thread-local image block
                 ImageBlock block(Vector2i(NORI_BLOCK_SIZE), camera->getReconstructionFilter());
-                ImageBlock Kblock(Vector2i(NORI_BLOCK_SIZE), camera->getReconstructionFilter());
-                // ImageBlock PosDeltablock(Vector2i(NORI_BLOCK_SIZE), camera->getReconstructionFilter());
-                // ImageBlock NegDeltablock(Vector2i(NORI_BLOCK_SIZE), camera->getReconstructionFilter());
-                
+                ImageBlock Kblock(Vector2i(NORI_BLOCK_SIZE), camera->getReconstructionFilter());    
 
                 //thread-local sampler 
                 std::unique_ptr<Sampler> sampler(scene->getSampler()->clone());
@@ -235,9 +215,7 @@ class DebiasedPM: public Integrator
                     Vector2i size = block.getSize();
                     block.clear();
                     Kblock.clear();
-                    // PosDeltablock.clear();
-                    // NegDeltablock.clear();
-
+                    
                     //process the block by pixels
                     for(int y=0;y<size.y();++y)
                     {
@@ -308,10 +286,6 @@ class DebiasedPM: public Integrator
         EstimateRes estimate(const uint32_t j, const float pmf, const Scene *scene, Sampler *sampler, const Ray3f &ray_) const {
             
             EstimateRes res;
-            // const float rad0 = init_Rad * std::pow(float(j),(alpha-1.f)/2.f);
-            // const float rad1 = init_Rad * std::pow(float(j+1),(alpha-1.f)/2.f);
-            // const float radk = init_Rad * std::pow(float(init_k),(alpha-1.f)/2.f);
-
 
             Ray3f curRay = ray_;
             int depth = 0;
@@ -432,7 +406,9 @@ class DebiasedPM: public Integrator
 
         void PhotonPass(const uint32_t j, const Scene* scene)
         {
-            const uint32_t PhotonCount = (std::pow( (j+1), 1-c*alpha))  * PhotonsUnit;
+            uint32_t PhotonCount = (std::pow( (j+1), 1-c*alpha))  * PhotonsUnit;
+            //control the size of photon map
+            if(PhotonCount > 80000000) PhotonCount = 80000000;
             Timer timer;
             std::unique_ptr<Sampler> Global_sampler(static_cast<Sampler *>(
             NoriObjectFactory::createInstance("independent", PropertyList())));
@@ -536,8 +512,28 @@ class DebiasedPM: public Integrator
 
         }
 
+        uint32_t SampleJ(const uint32_t k, const float psi, float& pmf) const
+        {
+            const float k_regular = std::pow(k+0.f,alpha-1.f);
+            float n = k*std::pow((1.f-psi),1.f/(alpha-1.f));
 
-        uint32_t SampleJ(const float psi, float& pmf )
+            uint32_t n1 = uint32_t(std::max(float(k) , std::floor(n)));
+            uint32_t n2 = n1+1;
+
+            float alpha_pmf = 8.f * (std::pow( float(n1),alpha-1.f) - std::pow( float(n2),alpha-1.f))/k_regular;
+            if(alpha_pmf<=0.f)
+            {
+                alpha_pmf =1.f;
+            }
+
+            pmf = alpha_pmf;
+
+            return n1;
+        
+        }
+
+
+        uint32_t SampleJ(const float psi, float& pmf )const
         {
             const float k_regular = std::pow(init_k+0.f,alpha-1.f);
             float n = init_k*std::pow((1.f-psi),1.f/(alpha-1.f));
@@ -580,6 +576,6 @@ class DebiasedPM: public Integrator
 
 
 
-NORI_REGISTER_CLASS(DebiasedPM, "debiasedpm")
+NORI_REGISTER_CLASS(DebiasedPPM, "debiasedppm")
 
 NORI_NAMESPACE_END

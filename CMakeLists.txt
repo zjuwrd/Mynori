@@ -75,7 +75,7 @@ add_executable(nori
   
   
   # Source code files
-  src/integrator/PPM.cpp
+  src/integrator/debiasedPPM.cpp
   src/integrator/debiasedPM.cpp
   src/integrator/SPPM.cpp
   src/integrator/photon/photon.cpp

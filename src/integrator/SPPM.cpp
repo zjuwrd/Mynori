@@ -13,346 +13,106 @@
 
 #include "photon/photon.hpp"
 
-#define USE_TBB
-
 extern int threadCount;
 
 NORI_NAMESPACE_BEGIN
-
-class SPPM: public Integrator
+struct PixelMsg
 {
-    using PhotonMap = PointKDTree<Photon>;
-    struct PixelMsg
+    Point2f pixel;
+    float radius;
+    Color3f flux;
+    uint32_t p_nums;
+
+    PixelMsg(){};
+
+    PixelMsg(Point2f pixel, float radius, Color3f flux, uint32_t p_nums): 
+        pixel(pixel), radius(radius), flux(flux), p_nums(p_nums) { }
+};
+
+class photon_sppm : public Integrator
+{
+public:
+    /// Photon map data structure
+    typedef PointKDTree<Photon> PhotonMap;
+
+    
+    photon_sppm(const PropertyList &props)
     {
-        Color3f flux;
-        float radius;
-        int photon_count;
+        m_photonCount = props.getInteger("photonCount", 100000);
+        m_iteration = props.getInteger("iteration", 1 );
+        m_sharedRadius = props.getFloat("radius", 0.1f);
+        alpha = props.getFloat("alpha", 0.7f);
+        m_photonTotal = 0;
+    }
 
-        PixelMsg() = default;
-        PixelMsg(float radius_):radius(radius_),photon_count(0), flux(0.f){}
-        
-    };
+    virtual bool HasRenderMethod()const override{return true;}
 
+    virtual void preprocess(const Scene *scene) override
+    {
+        m_photonMap = std::unique_ptr<PhotonMap>(new PhotonMap());
+        m_photonMap->reserve(m_photonCount); 
 
-
-    public:
-        SPPM(const PropertyList& props){
-            m_photoncount = props.getInteger("PhotonCount",10000);
-            m_iteration = props.getInteger("Iterations",10);
-            alpha = props.getFloat("alpha",0.7);
-            m_SharedRadius = props.getFloat("radius", 0.1f);
-            m_emittedcount = 0;
-
-        }
-
-        virtual void preprocess(const Scene* scene)
+        PixelMap.reserve(scene->getCamera()->getOutputSize().y());
+        for(int y=0;y<scene->getCamera()->getOutputSize().y();++y)
         {
-            m_photonmap = std::make_unique<PhotonMap>();
-            m_photonmap->reserve(m_photoncount);            
-
-            const Camera* camera = scene->getCamera();
-            Vector2i outputSize = camera->getOutputSize();
-            BlockGenerator blockGen(outputSize, NORI_BLOCK_SIZE);
-            
-            MsgImage.reserve(outputSize.y());
-
-            for(int y=0;y<outputSize.y();++y)
+            PixelMap.push_back(std::vector< std::vector<PixelMsg> >( scene->getCamera()->getOutputSize().x() ) );
+            for(int x=0;x<scene->getCamera()->getOutputSize().x();++x)
             {
-                MsgImage.push_back(std::vector<PixelMsg>(outputSize.x(),PixelMsg(m_SharedRadius)));
-            }
-
+                PixelMap[y].push_back(std::vector< PixelMsg>());
+                for(int sp=0;sp<scene->getSampler()->getSampleCount();++sp)
+                {
+                    PixelMap[y][x].push_back(PixelMsg(Point2f(x,y),m_sharedRadius,0.f,0));
+                }
+            }    
         }
+    }
+
+    Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray)const override{return 0.f;}
+
+    virtual void render(const Scene *scene, ImageBlock &Image) override
+    {
+        std::cout
+            << "\nsample nums: " << PixelMap.size()*PixelMap[0].size()*PixelMap[0][0].size()
+            << "\niteration nums: " << m_iteration
+            << "\nphoton nums per pass: " << m_photonCount
+            << std::endl;
         
-        virtual bool HasRenderMethod() const override {return true;}
-
-        virtual void render(const Scene* scene,ImageBlock& image,  std::vector<NoriScreen*>& screens)override{
-
-            for(int i=0;i<m_iteration; ++i)
-            {
-                // image.clear();
-                if(i%10 == 0)
-                    std::cout<<"iteraion["<<i+1<<"]"<<" begin."<<std::endl; 
-                
-                ShootPass(scene);
-                std::cout<<"total emitted photons="<<m_emittedcount <<std::endl;
-                CapturePass(scene,image);
-                if(i%10 == 0)
-                    std::cout<<"iteration["<<i+1<<"]"<<" ends."<<std::endl;
-            }
-
-        }
-
-        virtual Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray_) const override
+        Sampler *sampler = static_cast<Sampler *>(
+            NoriObjectFactory::createInstance("independent", PropertyList()));
+        std::vector<Mesh *> lights;
+        for (auto m : scene->getMeshes())
         {
-            constexpr int Mindepth = 3;
-            constexpr int Maxdepth = 100;
-
-            Ray3f curRay = ray_;
-            int depth = 0;
-            Intersection its;
-            Color3f throughput = 1.f;
-            Color3f L = 0.f;
-
-            while(depth<Maxdepth && scene->rayIntersect(curRay,its) )
-            {
-                auto bsdf = its.mesh->getBSDF();
-                
-                if(its.mesh->isEmitter())
-                {
-                    EmitterQueryRecord eQ(curRay.o, its.p, its.shFrame.n);
-                    const Emitter* emitter = its.mesh->getEmitter();
-                    L += throughput * emitter->eval(eQ);
-                    break;
-                }
-
-
-                if(bsdf->isDiffuse())
-                {
-                    Color3f Lp = 0.f;
-
-                    std::vector<uint32_t> res;
-                    m_photonmap->search(its.p,m_SharedRadius, res);
-                    float area = M_PI * m_SharedRadius * m_SharedRadius;
-
-                    if(res.size() >0)
-                    {
-                        for(const auto idx : res)
-                        {
-                            const auto& photon = (*m_photonmap)[idx];
-                            BSDFQueryRecord bQ( its.toLocal(-curRay.d), its.toLocal(-photon.getDirection()) ,EMeasure::ESolidAngle);
-                            Color3f fr = bsdf->eval(bQ);
-                            float abscosTheta = std::abs( its.toLocal(photon.getDirection()).z());
-                            Lp += throughput *fr* abscosTheta * photon.getPower() / m_emittedcount;   
-                        }
-                        Lp /= area;
-                        L += Lp;
-                    }
-
-                    break;
-                }
-
-                //russian roullete
-                if(depth>Mindepth)
-                {
-                    float p = std::min(0.99f, throughput.maxCoeff());
-                    if(sampler->next1D()>p)
-                    {
-                        break;
-                    }
-                    
-                    throughput /= p;
-                }
-
-
-                //sample new direction
-                BSDFQueryRecord bQ(its.toLocal(-curRay.d));
-                Color3f fr = bsdf->sample(bQ, sampler);
-                Vector3f newdir = its.toWorld(bQ.wo);
-                throughput *= fr;
-                curRay = Ray3f(its.p, newdir);
-                ++depth;
-            }
-        
-            return L;
-        
-        
+            if (m->isEmitter())
+                lights.emplace_back(m);
         }
+        int nLights = lights.size();
+        const Camera *camera = scene->getCamera();
 
-
-        virtual Color3f estimate(const Scene* scene, Sampler* sampler, const Ray3f& ray_, const Vector2i pixel)  
-        { 
-            constexpr int Mindepth = 3;
-            constexpr int Maxdepth = 100;
-
-            Ray3f curRay = ray_;
-            int depth = 0;
-            Intersection its;
-            Color3f throughput = 1.f;
-            Color3f L = 0.f;
-
-            auto& msg = MsgImage[pixel.y()][pixel.x()];
-
-            while(depth<Maxdepth && scene->rayIntersect(curRay,its) )
-            {
-                auto bsdf = its.mesh->getBSDF();
-                
-                if(its.mesh->isEmitter())
-                {
-                    EmitterQueryRecord eQ(curRay.o, its.p, its.shFrame.n);
-                    const Emitter* emitter = its.mesh->getEmitter();
-                    L += throughput * emitter->eval(eQ);
-                    break;
-                }
-
-
-                if(bsdf->isDiffuse())
-                {
-                    Color3f Lp = 0.f;
-
-                    std::vector<uint32_t> res;
-                    m_photonmap->search(its.p,m_SharedRadius, res);
-                    float area = M_PI * m_SharedRadius * m_SharedRadius;
-
-                    if(res.size() >0)
-                    {
-                        for(const auto idx : res)
-                        {
-                            const auto& photon = (*m_photonmap)[idx];
-                            BSDFQueryRecord bQ( its.toLocal(-curRay.d), its.toLocal(-photon.getDirection()) ,EMeasure::ESolidAngle);
-                            Color3f fr = bsdf->eval(bQ);
-                            float abscosTheta = std::abs( its.toLocal(photon.getDirection()).z());
-                            Lp += fr* abscosTheta * photon.getPower();   
-                        }
-
-                        float rate = (float)(msg.photon_count + alpha * res.size()) / (msg.photon_count + res.size());
-                        msg.radius *= std::sqrt(rate);
-                        msg.photon_count += res.size() *alpha;
-                        msg.flux = (msg.flux + Lp) * rate * throughput;
-                    }
-
-                    L += msg.flux / (M_PI * msg.radius * msg.radius * m_emittedcount);
-                    break;
-                }
-
-                //russian roullete
-                if(depth>Mindepth)
-                {
-                    float p = std::min(0.99f, throughput.maxCoeff());
-                    if(sampler->next1D()>p)
-                    {
-                        break;
-                    }
-                    
-                    throughput /= p;
-                }
-
-
-                //sample new direction
-                BSDFQueryRecord bQ(its.toLocal(-curRay.d));
-                Color3f fr = bsdf->sample(bQ, sampler);
-                Vector3f newdir = its.toWorld(bQ.wo);
-                throughput *= fr;
-                curRay = Ray3f(its.p, newdir);
-                ++depth;
-            }
-        
-            return L;
-        }
-
-        virtual std::string toString() const override
+        for (uint32_t i = 0; i < m_iteration; ++i)
         {
-            return tfm::format(
-                "SPPM[\n"
-                "]");
-        }
+            Timer timer;
+            m_photonMap = std::unique_ptr<PhotonMap>(new PhotonMap());
+            m_photonMap->reserve(m_photonCount); //存每次pass的光子
 
-
-    private:
-        void CapturePass(const Scene* scene, ImageBlock& image){
-            // defining Min-Max depth for Path tracing
-            constexpr int Mindepth = 3;
-            constexpr int Maxdepth = 100;
-            // camra for the scene
-            const Camera* camera = scene->getCamera();
-            //get size of the image
-            Vector2i outputSize = camera->getOutputSize();
-            //Block Generator
-            BlockGenerator blockGen(outputSize, NORI_BLOCK_SIZE);
-            //Block range for tbb
-            tbb::blocked_range<int> range(0, blockGen.getBlockCount());
-            // parallel task for path tracing. Image is divided into blocks
-            // to be dispatched to separate threads.
-
-            auto map= [&](const tbb::blocked_range<int>& range)
-            {
-                //thread-local image block
-                ImageBlock block(Vector2i(NORI_BLOCK_SIZE), camera->getReconstructionFilter());
-                //thread-local sampler 
-                std::unique_ptr<Sampler> sampler(scene->getSampler()->clone());
-
-                for(int i=range.begin(); i < range.end(); ++i)
-                {
-                    //get next block to process
-                    blockGen.next(block);
-                    sampler->prepare(block);
-                    
-                    //process (progressively render) block
-                    //get offset of the block
-                    Point2i ofs = block.getOffset();
-                    //get size of the block
-                    Vector2i size = block.getSize();
-                    block.clear();
-
-                    //process the block by pixels
-                    for(int y=0;y<size.y();++y)
-                    {
-                        for(int x=0;x<size.x();++x)
-                        {
-                            auto& msg = MsgImage[y][x];
-
-                            //sample for each pixels couple of times predefined.
-                            for(uint32_t samplecnt=0;samplecnt< 1/*sampler->getSampleCount()*/   ;++samplecnt)
-                            {
-                                //get positions in a single pixel
-                                Point2f pixelSample = Point2f((float) (x + ofs.x()), (float) (y + ofs.y())) + sampler->next2D();
-                                //get paerturesample
-                                Point2f apertureSample = sampler->next2D();
-
-                                /* Sample a ray from the camera */
-                                Ray3f ray;
-                                Color3f value = camera->sampleRay(ray, pixelSample, apertureSample);
-                                /* Renew the Pixelmsgs and Compute the incident radiance */
-#if 1
-                                value *= estimate(scene,sampler.get(),ray,Vector2i(x+ ofs.x(),y+ofs.y()));
-                                block.put(pixelSample, value);
-#endif
-
-#if 0
-                                value *= Li(scene, sampler.get(), ray);
-                                block.put(pixelSample, value);
-#endif
-
-                            }
-                        
-                        
-                        
-                        }
-                    }
-
-                    // result->put(block);
-                    image.put(block);
-                }
-            };
-            
-            // do Capture in parallel
-            tbb::task_scheduler_init init(threadCount);                
-            tbb::parallel_for(range,map);
-
-            // map(range);
-
-        }
-        
-        void ShootPass(const Scene* scene){
-            constexpr int Mindepth=3;
-            constexpr int MaxDepth=100;
-
-            Timer timer;    
-
+            uint32_t storedPhotons = 0;
+            uint32_t photonEmitter = 0;
+/*-----------------------------------------------------------------------------------------------------------------------*/
+/*----------------------------------------------------------Shooting pass------------------------------------------------*/
+/*-----------------------------------------------------------------------------------------------------------------------*/
             std::unique_ptr<Sampler> Global_sampler=scene->getSampler()->clone();
 
-            m_photonmap->clear();
-            m_photonmap->reserve(m_photoncount);
+            m_photonMap->clear();
+            m_photonMap->reserve(m_photonCount);
 
             int shoot_cnt=0;
 
-#if 1
             // mutex for photonmap
             tbb::mutex pm_mutex;
             //thread for shooting photons
             std::thread PhotonThread(
             [&]{
                     tbb::task_scheduler_init init(threadCount);
-                    shoot_cnt = tbb::parallel_reduce(tbb::blocked_range<size_t>(0,m_photoncount),0,
+                    shoot_cnt = tbb::parallel_reduce(tbb::blocked_range<size_t>(0,m_photonCount),0,
                     [&](const tbb::blocked_range<size_t>& r,int init)->int
                     {
                         
@@ -384,7 +144,7 @@ class SPPM: public Integrator
                                         //mutex on m_phtonmap
                                         {
                                             tbb::mutex::scoped_lock lock(pm_mutex);
-                                            m_photonmap->push_back(Photon(its.p, ray.d, throughput * flux));                                
+                                            m_photonMap->push_back(Photon(its.p, ray.d, throughput * flux));                                
                                             lock.release();
                                         }
                                         ++photon_cnt;
@@ -399,7 +159,7 @@ class SPPM: public Integrator
                                     throughput *= fr;
 
                                     //Russian roullete
-                                    if(depth>Mindepth)
+                                    if(depth>MinDepth)
                                     {
                                         float p = std::min(0.99f, throughput.maxCoeff());
                                         
@@ -424,90 +184,186 @@ class SPPM: public Integrator
                     });
                 }
             );
-
         PhotonThread.join();
-#else 
-        const auto sampler = Global_sampler;
-            for(int photon_cnt=0;photon_cnt<m_photoncount;)
+
+        timer.reset();
+        // m_photonmap->scale(shoot_cnt);
+        m_photonTotal += shoot_cnt;
+        m_photonMap->build();
+
+        std::cout<<"Photon Map pass done."<<std::endl;
+
+/*-----------------------------------------------------------------------------------------------------------------------*/
+/*----------------------------------------------------------PT pass------------------------------------------------------*/
+/*-----------------------------------------------------------------------------------------------------------------------*/
+// defining Min-Max depth for Path tracing
+    // camra for the scene
+    const Camera* camera = scene->getCamera();
+    //get size of the image
+    Vector2i outputSize = camera->getOutputSize();
+    //Block Generator
+    BlockGenerator blockGen(outputSize, NORI_BLOCK_SIZE);
+    //Block range for tbb
+    tbb::blocked_range<int> range(0, blockGen.getBlockCount());
+    // parallel task for path tracing. Image is divided into blocks
+    // to be dispatched to separate threads.
+
+            auto map= [&](const tbb::blocked_range<int>& range)
             {
-                const Mesh* emissiveMesh = scene->SampleLight(sampler->next1D());
-                const Emitter* emitter = emissiveMesh->getEmitter();
+                //thread-local image block
+                ImageBlock block(Vector2i(NORI_BLOCK_SIZE), camera->getReconstructionFilter());
+                //thread-local sampler 
+                std::unique_ptr<Sampler> sampler(scene->getSampler()->clone());
 
-                PhotonRay res = emitter->ShootPhoton(sampler);
-                
-                if(res.success && !res.flux.isZero())
+                for(int i=range.begin(); i < range.end(); ++i)
                 {
-                    ++shoot_cnt;
-                    Ray3f ray(res.ray);
-                    Color3f flux(res.flux);
-                    Intersection its;
-                    int depth = 0;
+                    //get next block to process
+                    blockGen.next(block);
+                    sampler->prepare(block);
+                    
+                    //process (progressively render) block
+                    //get offset of the block
+                    Point2i ofs = block.getOffset();
+                    //get size of the block
+                    Vector2i size = block.getSize();
+                    block.clear();
 
-                    Color3f throughput=1.f;
-
-
-                    while((depth<MaxDepth) && photon_cnt < m_photoncount && scene->rayIntersect(ray,its))
+                    //process the block by pixels
+                    for(int y=0;y<size.y();++y)
                     {
-                        const BSDF* bsdf = its.mesh->getBSDF();
-                        if(bsdf->isDiffuse())
+                        for(int x=0;x<size.x();++x)
                         {
-                            m_photonmap->push_back(Photon(its.p, ray.d, throughput * flux));
-                            ++photon_cnt;
-                        }
-
-                        BSDFQueryRecord bQ(its.toLocal(-ray.d));
-                        Color3f fr = bsdf->sample(bQ,sampler);
-
-                        Vector3f newdir = its.toWorld(bQ.wo);
-
-                        throughput *= fr;
-
-                        //Russian roullete
-                        if(depth>Mindepth)
-                        {
-                            float p = std::min(0.99f, throughput.maxCoeff());
-                            if(sampler->next1D() > p)
+                            for(int sp=0;sp<scene->getSampler()->getSampleCount();++sp)
                             {
-                                break;
-                            }
-                            throughput /= p;
-                        }
+                                //sample for each pixels couple of times predefined.
+                                {
+                                    //get positions in a single pixel
+                                    Point2f pixelSample = Point2f((float) (x + ofs.x()), (float) (y + ofs.y())) + sampler->next2D();
+                                    //get paerturesample
+                                    Point2f apertureSample = sampler->next2D();
+
+                                    /* Sample a ray from the camera */
+                                    Ray3f ray;
+                                    Color3f value = camera->sampleRay(ray, pixelSample, apertureSample);
+                                    /* Renew the Pixelmsgs and Compute the incident radiance */
+                                    
+                                    {
+                                        auto& pp = PixelMap[y+ofs.y()][x+ofs.x()][sp];
+                                        Point2f sample = pp.pixel + sampler->next2D();
+                                        Intersection its;
+                                        Color3f throughput(1.f);
+                                        uint32_t depth = 0;
+
+                                        
+                                        for ( ;depth<MaxDepth && scene->rayIntersect(ray,its);++depth)
+                                        {
+                                            //Le
+                                            if (its.mesh->isEmitter())
+                                            {
+                                                EmitterQueryRecord eRec(ray.o, its.p, its.shFrame.n);
+                                                Color3f power = its.mesh->getEmitter()->eval(eRec);
+                                                Image.put(pp.pixel + Point2f(0.5f), power * throughput);
+                                                break;
+                                            }
+
+                                            //diffuse
+                                            if (its.mesh->getBSDF()->isDiffuse())
+                                            {
+                                                std::vector<uint32_t> QueryRes;
+                                                m_photonMap->search(its.p, pp.radius, QueryRes);
+                                                if (QueryRes.size() == 0)
+                                                    break;
+                                                float rate = (float)(pp.p_nums + alpha * QueryRes.size()) / (pp.p_nums + QueryRes.size());
+                                                pp.p_nums += QueryRes.size() * alpha;
+                                                pp.radius = pp.radius * std::sqrt( rate);
+                                                Color3f Lp(0.f);
+                                                for (auto idx : QueryRes)
+                                                {
+                                                    Photon &photon = (*m_photonMap)[idx];
+                                                    BSDFQueryRecord bRec(its.shFrame.toLocal(-ray.d), its.shFrame.toLocal(-photon.getDirection()), ESolidAngle);
+                                                    Color3f fr = its.mesh->getBSDF()->eval(bRec);
+                                                    float abscosTheta = std::max(0.f, bRec.wo.z()) ;
+                                                    fr *= abscosTheta;
+                                                    Lp += fr * photon.getPower();
+                                                }
+                                                pp.flux = (pp.flux + Lp) * rate * throughput;
+                                                break;
+                                            }
+
+                                            //others
+                                            BSDFQueryRecord bRec(its.shFrame.toLocal(-ray.d));
+                                            Color3f fr = its.mesh->getBSDF()->sample(bRec, sampler->next2D());
+                                            if (fr.maxCoeff() == 0.f)
+                                                break;
+
+                                            throughput *= fr;
+                                            Ray3f ro(its.p, its.shFrame.toWorld(bRec.wo));
+                                            memcpy((void*)&ray,(void*)&ro,sizeof(Ray3f));
+                                            
+                                            if (depth > MinDepth)
+                                            {
+                                                //RR
+                                                float q = throughput.maxCoeff();
+                                                if (sampler->next1D() > q)
+                                                    break;
+                                                throughput /= q;
+                                            }
+                                        }
+                                        Color3f power = pp.flux / (m_photonTotal * M_PI * pp.radius * pp.radius);
+                                        value *= power;
+                                    }//viewPass结束
+                                                                        
+                                    block.put(pixelSample, value);
+
+                                }
                         
-                        ++depth;
-                        ray = Ray3f(its.p,newdir,Epsilon,INFINITY);
+                            }
+                        
+                        }
                     }
 
+                    // result->put(block);
+                    Image.put(block);
                 }
+            };
+            
+            // do Capture in parallel
+            tbb::task_scheduler_init init(threadCount);                
+            tbb::parallel_for(range,map);
 
 
-
-            }
-
-#endif
-
-            timer.reset();
-            // m_photonmap->scale(shoot_cnt);
-            m_emittedcount += shoot_cnt;
-            m_photonmap->build();
-
+        if(i%10==9)
+        {
+            cout << "(the "<<i-8<<"-"<< i+1 <<" passes took " << timer.elapsedString() << ")" << endl;
         }
-        
-        
-        
-        
-        uint32_t m_photoncount;
-        uint32_t m_emittedcount;
-        uint32_t m_iteration;
-        float m_SharedRadius;
-        float alpha;
-        std::unique_ptr<PhotonMap> m_photonmap=nullptr;
-        // std::unique_ptr<ImageBlock> result = nullptr;
+        }//iter结束
+    }
 
-        std::vector< std::vector<PixelMsg> > MsgImage;
-        
 
+
+
+
+
+    virtual std::string toString() const override
+    {
+        return tfm::format(
+            "PhotonMapper[\n"
+            "]");
+    }
+
+private:
+    static constexpr int MinDepth=3;
+    static constexpr int MaxDepth=100;
+
+
+    uint32_t m_photonCount;                   
+    uint32_t m_photonTotal;                   
+    uint32_t m_iteration;                     
+    float m_sharedRadius;                     
+    float alpha;                            
+    std::vector< std::vector< std::vector<PixelMsg> > >  PixelMap; 
+    std::unique_ptr<PhotonMap> m_photonMap; 
 };
 
-NORI_REGISTER_CLASS(SPPM,"sppm")
-
+NORI_REGISTER_CLASS(photon_sppm, "sppm");
 NORI_NAMESPACE_END
