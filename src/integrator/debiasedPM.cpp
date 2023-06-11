@@ -8,7 +8,7 @@
 #include<nori/camera.h>
 #include<nori/block.h>
 #include <nori/gui.h>
-
+#include <nori/bitmap.h>
 #include"photon/photon.hpp"
 #include<tbb/tbb.h>
 #include<thread>
@@ -39,6 +39,7 @@ class DebiasedPM: public Integrator
             init_Rad = props.getFloat("radius",0.2f);
             iterations = props.getInteger("iterations",1);
             PhotonsUnit = props.getInteger("photonsunit",100000);
+            record = props.getInteger("record",0);
 
         }
 
@@ -133,7 +134,7 @@ class DebiasedPM: public Integrator
 
             KImg = std::make_unique<ImageBlock>(scene->getCamera()->getOutputSize(),scene->getCamera()->getReconstructionFilter());
             KImg->clear();
-            NoriScreen* Kscreen = new NoriScreen(*KImg, "BiasedPM_K");
+            NoriScreen* Kscreen = new NoriScreen(*KImg, "Biased Result");
             screens.push_back(Kscreen);
 
             for(int i=0;i<iterations;++i)
@@ -143,11 +144,10 @@ class DebiasedPM: public Integrator
                 const uint32_t j1 = j0+1;
                 const uint32_t k = init_k;
 
+                std::cout<<"--------------------------------------------------"<<std::endl;
                 std::cout<<"iteration "<<i+1<<" starts."<<std::endl;
-
                 std::cout<<"j="<<j0<<std::endl;
                 std::cout<<"k="<<k<<std::endl;
-
 
                 rad0 = init_Rad * std::pow(float(j0),(alpha-1.f)/2.f);
                 rad1 = init_Rad * std::pow(float(j1),(alpha-1.f)/2.f);
@@ -156,11 +156,12 @@ class DebiasedPM: public Integrator
                 std::cout<<"rad1="<<rad1<<std::endl;
                 std::cout<<"radk="<<radk<<std::endl;
                 
-
                 std::cout<<"Photon Pass"<<std::endl;
                 PhotonPass(j0, scene);
                 std::cout<<"PT Pass"<<std::endl;
                 CapturePass(i,j0,alpha_pmf,scene,image, screens);
+                std::cout<<"done.\ntotoal photons "<<totoal_photons<<std::endl;
+
 
             }
         }
@@ -188,22 +189,6 @@ class DebiasedPM: public Integrator
 
             BlockGenerator KblockGen(outputSize, NORI_BLOCK_SIZE);
             
-
-            // PosDeltaImg = std::make_unique<ImageBlock>(scene->getCamera()->getOutputSize(),scene->getCamera()->getReconstructionFilter());
-            // PosDeltaImg->clear();
-            // BlockGenerator PosDeltablockGen(outputSize, NORI_BLOCK_SIZE);
-            // NoriScreen* PosDeltascreen = new NoriScreen(*PosDeltaImg);
-            // screens.push_back(PosDeltascreen);
-
-            // NegDeltaImg = std::make_unique<ImageBlock>(scene->getCamera()->getOutputSize(),scene->getCamera()->getReconstructionFilter());
-            // NegDeltaImg->clear();
-            // BlockGenerator NegDeltablockGen(outputSize, NORI_BLOCK_SIZE);
-            // NoriScreen* NegDeltascreen = new NoriScreen(*NegDeltaImg);
-            // screens.push_back(NegDeltascreen);
-
-
-
-
             m_radius = init_Rad;
 
             auto map= [&](const tbb::blocked_range<int>& range)
@@ -223,9 +208,7 @@ class DebiasedPM: public Integrator
                     //get next block to process
                     blockGen.next(block);
                     KblockGen.next(Kblock);
-                    // PosDeltablockGen.next(PosDeltablock);
-                    // NegDeltablockGen.next(NegDeltablock);
-
+                    
                     sampler->prepare(block);
                     
                     //process (progressively render) block
@@ -235,9 +218,7 @@ class DebiasedPM: public Integrator
                     Vector2i size = block.getSize();
                     block.clear();
                     Kblock.clear();
-                    // PosDeltablock.clear();
-                    // NegDeltablock.clear();
-
+                    
                     //process the block by pixels
                     for(int y=0;y<size.y();++y)
                     {
@@ -259,7 +240,7 @@ class DebiasedPM: public Integrator
                             #ifdef DEBIASED
                                 auto res = estimate(j,pmf, scene, sampler.get(),ray);
                                 //final image
-                                Color3f ImageVal = value * (res.Lik + (res.Li1 - res.Li0) / pmf);
+                                Color3f ImageVal = value * (res.Lik + (res.Li1 - res.Li0) / (pmf) ) / 5.3f;
                                 ImageVal = ImageVal.clamp();
                                 //biased k image
                                 Color3f KimageVal = value * res.Lik;
@@ -269,13 +250,6 @@ class DebiasedPM: public Integrator
                                 DeltaimageVal = value * DeltaimageVal;
                                 block.put(pixelSample, ImageVal );
                                 Kblock.put(pixelSample, res.Lik);
-
-                                // if(DeltaimageVal.minCoeff() > 0)
-                                //     PosDeltablock.put(pixelSample, DeltaimageVal);
-                                // else if(DeltaimageVal.maxCoeff() < 0)
-                                //     NegDeltablock.put(pixelSample, -DeltaimageVal);
-
-                            
                             #else
                                 value *= Li(scene,sampler.get(),ray);
                                 block.put(pixelSample ,value);
@@ -287,8 +261,6 @@ class DebiasedPM: public Integrator
                     // image.weighted_put(block, 1.f/( float(iteration) + 1.f) );
                     image.put(block);
                     KImg->put(Kblock);
-                    // PosDeltaImg->put(PosDeltablock);
-                    // NegDeltaImg->put(NegDeltablock);
                 #else
                     image.put(block);
                 #endif
@@ -301,6 +273,17 @@ class DebiasedPM: public Integrator
 
             // map(range);
 
+
+                if(record)
+                {
+                    std::unique_ptr<Bitmap> bitmap(image.toBitmap());
+                    std::string outputName = "results/unbiasedpm/unbiasedPM" + std::to_string(iteration+1) ;
+                    bitmap->savePNG(outputName);
+                    std::unique_ptr<Bitmap> bitmap1(KImg->toBitmap());
+                    std::string outputName1 = "results/unbiasedpm/biasedPM" + std::to_string(iteration+1) ;
+                    bitmap1->savePNG(outputName1);
+                }
+
         }
 
 
@@ -308,10 +291,6 @@ class DebiasedPM: public Integrator
         EstimateRes estimate(const uint32_t j, const float pmf, const Scene *scene, Sampler *sampler, const Ray3f &ray_) const {
             
             EstimateRes res;
-            // const float rad0 = init_Rad * std::pow(float(j),(alpha-1.f)/2.f);
-            // const float rad1 = init_Rad * std::pow(float(j+1),(alpha-1.f)/2.f);
-            // const float radk = init_Rad * std::pow(float(init_k),(alpha-1.f)/2.f);
-
 
             Ray3f curRay = ray_;
             int depth = 0;
@@ -439,6 +418,8 @@ class DebiasedPM: public Integrator
             m_photonmap = std::make_unique<PhotonMap>();
             m_photonmap->reserve(PhotonCount);
 
+            totoal_photons += PhotonCount;
+            
             int shoot_cnt=0;
 
             tbb::mutex pm_mutex;            
@@ -453,9 +434,6 @@ class DebiasedPM: public Integrator
                         const size_t local_photon_cnt = r.end()-r.begin();
 
                         std::unique_ptr<Sampler> sampler = Global_sampler->newClone();
-
-                        // std::cout<<"thread "<<r.begin() <<" shooting "<<local_photon_cnt<<" photons"<<std::endl;
-
 
                         for(size_t photon_cnt= 0 ;photon_cnt < local_photon_cnt; )
                         {
@@ -524,16 +502,10 @@ class DebiasedPM: public Integrator
                 }
             );
 
-        PhotonThread.join();
-        std::cout<<"done. time elased "<<timer.elapsedString()<<"." <<std::endl;
-        std::cout<<"collected photons / shooted photons = "<<m_photonmap->size()<<"/"<<shoot_cnt<<std::endl;
-        timer.reset();
-        std::cout<<"building photon map ..."<<std::endl;
-        m_photonmap->scale(shoot_cnt);
-        m_photonmap->build();
-        std::cout<<"done. time elased "<<timer.elapsedString()<<"." <<std::endl;
-        
-
+            PhotonThread.join();
+            timer.reset();
+            m_photonmap->scale(shoot_cnt);
+            m_photonmap->build();
         }
 
 
@@ -545,7 +517,7 @@ class DebiasedPM: public Integrator
             uint32_t n1 = uint32_t(std::max(float(init_k) , std::floor(n)));
             uint32_t n2 = n1+1;
 
-            float alpha_pmf = 8.f * (std::pow( float(n1),alpha-1.f) - std::pow( float(n2),alpha-1.f))/k_regular;
+            float alpha_pmf = (std::pow( float(n1),alpha-1.f) - std::pow( float(n2),alpha-1.f))/k_regular;
             if(alpha_pmf<=0.f)
             {
                 alpha_pmf =1.f;
@@ -557,6 +529,9 @@ class DebiasedPM: public Integrator
         }
 
 
+        bool record = false;
+
+        uint32_t totoal_photons=0;
 
         //init k for Prime Estimizer
         float rad0,rad1,radk;

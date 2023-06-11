@@ -132,7 +132,7 @@ class DebiasedPPM: public Integrator
             
             KImg = std::make_unique<ImageBlock>(scene->getCamera()->getOutputSize(),scene->getCamera()->getReconstructionFilter());
             KImg->clear();
-            NoriScreen* Kscreen = new NoriScreen(*KImg, "BiasedPM_K");
+            NoriScreen* Kscreen = new NoriScreen(*KImg, "Biased Result");
             screens.push_back(Kscreen);
 
             for(int i=0;i<iterations;++i)
@@ -141,9 +141,9 @@ class DebiasedPPM: public Integrator
                 const uint32_t k = init_k+i;
                 const uint32_t j0 = SampleJ(k, sampler->next1D(), alpha_pmf);
                 const uint32_t j1 = j0+1;
-                
-                std::cout<<"iteration "<<i+1<<" starts."<<std::endl;
 
+                std::cout<<"------------------------------------------------"<<std::endl;
+                std::cout<<"iteration "<<i+1<<" starts."<<std::endl;
                 std::cout<<"j="<<j0<<std::endl;
                 std::cout<<"k="<<k<<std::endl;
 
@@ -155,12 +155,12 @@ class DebiasedPPM: public Integrator
                 std::cout<<"rad1="<<rad1<<std::endl;
                 std::cout<<"radk="<<radk<<std::endl;
                 
-
                 std::cout<<"Photon Pass"<<std::endl;
                 PhotonPass(j0, scene);
                 std::cout<<"PT Pass"<<std::endl;
                 CapturePass(i,j0,alpha_pmf,scene,image, screens);
-
+                std::cout<<"done."<<std::endl;
+                std::cout<<"totoal photon count: "<<total_photons<<std::endl;
             }
         }
 
@@ -237,14 +237,12 @@ class DebiasedPPM: public Integrator
                             #ifdef DEBIASED
                                 auto res = estimate(j,pmf, scene, sampler.get(),ray);
                                 //final image
-                                Color3f ImageVal = value * (res.Lik + (res.Li1 - res.Li0) / pmf);
+                                Color3f ImageVal = value * (res.Lik + (res.Li1 - res.Li0) / pmf)/5.3f;
                                 ImageVal = ImageVal.clamp();
                                 //biased k image
                                 Color3f KimageVal = value * res.Lik;
                                 KimageVal = KimageVal.clamp();
                                 //delta graph
-                                Color3f DeltaimageVal = (res.Li1 - res.Li0) / pmf;
-                                DeltaimageVal = value * DeltaimageVal;
                                 block.put(pixelSample, ImageVal );
                                 Kblock.put(pixelSample, res.Lik);
 
@@ -407,6 +405,7 @@ class DebiasedPPM: public Integrator
         void PhotonPass(const uint32_t j, const Scene* scene)
         {
             uint32_t PhotonCount = (std::pow( (j+1), 1-c*alpha))  * PhotonsUnit;
+            total_photons += PhotonCount;
             //control the size of photon map
             if(PhotonCount > 80000000) PhotonCount = 80000000;
             Timer timer;
@@ -501,15 +500,9 @@ class DebiasedPPM: public Integrator
             );
 
         PhotonThread.join();
-        std::cout<<"done. time elased "<<timer.elapsedString()<<"." <<std::endl;
-        std::cout<<"collected photons / shooted photons = "<<m_photonmap->size()<<"/"<<shoot_cnt<<std::endl;
         timer.reset();
-        std::cout<<"building photon map ..."<<std::endl;
         m_photonmap->scale(shoot_cnt);
         m_photonmap->build();
-        std::cout<<"done. time elased "<<timer.elapsedString()<<"." <<std::endl;
-        
-
         }
 
         uint32_t SampleJ(const uint32_t k, const float psi, float& pmf) const
@@ -520,7 +513,7 @@ class DebiasedPPM: public Integrator
             uint32_t n1 = uint32_t(std::max(float(k) , std::floor(n)));
             uint32_t n2 = n1+1;
 
-            float alpha_pmf = 8.f * (std::pow( float(n1),alpha-1.f) - std::pow( float(n2),alpha-1.f))/k_regular;
+            float alpha_pmf = (std::pow( float(n1),alpha-1.f) - std::pow( float(n2),alpha-1.f))/k_regular;
             if(alpha_pmf<=0.f)
             {
                 alpha_pmf =1.f;
@@ -541,7 +534,7 @@ class DebiasedPPM: public Integrator
             uint32_t n1 = uint32_t(std::max(float(init_k) , std::floor(n)));
             uint32_t n2 = n1+1;
 
-            float alpha_pmf = 8.f * (std::pow( float(n1),alpha-1.f) - std::pow( float(n2),alpha-1.f))/k_regular;
+            float alpha_pmf = (std::pow( float(n1),alpha-1.f) - std::pow( float(n2),alpha-1.f))/k_regular;
             if(alpha_pmf<=0.f)
             {
                 alpha_pmf =1.f;
@@ -557,6 +550,7 @@ class DebiasedPPM: public Integrator
         //init k for Prime Estimizer
         float rad0,rad1,radk;
 
+        uint32_t total_photons=0;
         uint32_t init_k=0;
         uint32_t iterations=0;
         float init_Rad =  0.2f;

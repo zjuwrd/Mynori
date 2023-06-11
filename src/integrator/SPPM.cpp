@@ -10,7 +10,7 @@
 #include <tbb/blocked_range.h>
 #include <thread>
 #include <memory>
-
+#include <nori/bitmap.h>
 #include "photon/photon.hpp"
 
 extern int threadCount;
@@ -43,6 +43,9 @@ public:
         m_sharedRadius = props.getFloat("radius", 0.1f);
         alpha = props.getFloat("alpha", 0.7f);
         m_photonTotal = 0;
+
+        record = props.getInteger("record",0);
+
     }
 
     virtual bool HasRenderMethod()const override{return true;}
@@ -290,7 +293,6 @@ public:
                                                 break;
                                             }
 
-                                            //others
                                             BSDFQueryRecord bRec(its.shFrame.toLocal(-ray.d));
                                             Color3f fr = its.mesh->getBSDF()->sample(bRec, sampler->next2D());
                                             if (fr.maxCoeff() == 0.f)
@@ -302,7 +304,6 @@ public:
                                             
                                             if (depth > MinDepth)
                                             {
-                                                //RR
                                                 float q = throughput.maxCoeff();
                                                 if (sampler->next1D() > q)
                                                     break;
@@ -311,7 +312,7 @@ public:
                                         }
                                         Color3f power = pp.flux / (m_photonTotal * M_PI * pp.radius * pp.radius);
                                         value *= power;
-                                    }//viewPass结束
+                                    }
                                                                         
                                     block.put(pixelSample, value);
 
@@ -332,10 +333,17 @@ public:
             tbb::parallel_for(range,map);
 
 
-        if(i%10==9)
-        {
-            cout << "(the "<<i-8<<"-"<< i+1 <<" passes took " << timer.elapsedString() << ")" << endl;
-        }
+            // if(i%10==9)
+            // {
+            //     cout << "(the "<<i-8<<"-"<< i+1 <<" passes took " << timer.elapsedString() << ")" << endl;
+            // }
+            if(record)
+            {
+                std::unique_ptr<Bitmap> bitmap(Image.toBitmap());
+                std::string outputName = "results/sppm/SSPM" + std::to_string(i+1) ;
+                bitmap->savePNG(outputName);
+            }
+
         }//iter结束
     }
 
@@ -355,7 +363,7 @@ private:
     static constexpr int MinDepth=3;
     static constexpr int MaxDepth=100;
 
-
+    bool record = false;
     uint32_t m_photonCount;                   
     uint32_t m_photonTotal;                   
     uint32_t m_iteration;                     

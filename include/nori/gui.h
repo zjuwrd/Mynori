@@ -13,7 +13,7 @@ NORI_NAMESPACE_BEGIN
 
 class NoriScreen : public nanogui::Screen {
 public:
-    NoriScreen(const ImageBlock &block, std::string title = "Nori");
+    NoriScreen(const ImageBlock &block, std::string title = "Unbiased Result");
     void draw_contents() override;
 private:
     const ImageBlock &m_block;

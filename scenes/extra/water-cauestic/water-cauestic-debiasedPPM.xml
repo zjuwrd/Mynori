@@ -3,9 +3,9 @@
 
 <scene>
 	
-	<integrator type = "debiasedsppm">
-		<float name="radius" value="0.05"/>
-		<integer name="photonsunit" value="200000" />
+	<integrator type = "debiasedppm">
+		<float name="radius" value="0.02"/>
+		<integer name="photonsunit" value="524288" />
 		<integer name="initk" value="10"/>
 		<integer name="iterations" value="50" />
 	</integrator>
@@ -17,8 +17,8 @@
 		<transform name="toWorld" >
 			<matrix value="-1 0 1.50996e-007 -1.03263e-006 0 1 0 0.990944 -1.50996e-007 0 -1 6.83879 0 0 0 1"/>
 		</transform>	
-	    <integer name="height" value="600"/>
-		<integer name="width" value="600"/>
+	    <integer name="height" value="512"/>
+		<integer name="width" value="512"/>
     </camera>
 
 

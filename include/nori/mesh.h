@@ -76,14 +76,7 @@ using SampleMeshResult = MeshQeuryRecord;
  */
 class Mesh : public NoriObject {
 public:
-    
-    SampleMeshResult sampleSurfaceUniform(Sampler* sampler)const;
-
     /// Sample point on the mesh uniformly
-    std::pair<Point3f,Normal3f> UniformSamplePoint(Sampler* sampler, float& pdf) const;
-
-    virtual void samplePosition(const Point2f& sample, Point3f& position, Normal3f& normal, const float optional_u)const;
-    
     virtual MeshQeuryRecord UniformSamplePoint(Sampler* sampler) const ;
 
 

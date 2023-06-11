@@ -4,32 +4,14 @@
 <scene>
 	
 
-	<!-- <integrator type = "sppm">
-		<float name="radius" value="0.02"/>
-		<integer name="iteration" value="80"/>
-		<float name="alpha" value="0.3" />
-		<integer name="photonCount" value="5000000"/>
-	</integrator> -->
+	
 	
 
-	<integrator type = "debiasedpm">
-		<float name="radius" value="0.05"/>
-		<integer name="photonsunit" value="200000" />
-		<integer name="k" value="10"/>
-		<integer name="iterations" value="10" />
-	</integrator>
 	
-
-	<!-- <integrator type="sppm">
-		<integer name="PhotonCount" value="1000000"/>
-		<float name="radius" value="0.1" />
-		<integer name="Iterations" value="100" />
-	</integrator> -->
-
-	<!-- <integrator type="PhotonMapping">
-		<integer name="photoncount" value="21801058"/>
+	<integrator type="PhotonMapping">
+		<integer name="photoncount" value="400000000"/>
 		<float name="radius" value="0.001"/>
-	</integrator> -->
+	</integrator>
 
 
 
@@ -47,7 +29,7 @@
 
 
 	<sampler type="independent">
-		<integer name="sampleCount" value="32"/>
+		<integer name="sampleCount" value="256"/>
 	</sampler>
 
 	

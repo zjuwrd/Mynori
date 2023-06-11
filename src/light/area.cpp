@@ -31,7 +31,7 @@ public:
 
     virtual Color3f sample(const Mesh* mesh, EmitterQueryRecord &eRec, Sampler* &sample) const override
     {
-        SampleMeshResult point = mesh->sampleSurfaceUniform(sample);
+        MeshQeuryRecord point = mesh->UniformSamplePoint(sample);
         eRec.p = point.p;
         eRec.n = point.n;
         eRec.wi = (eRec.p - eRec.ref).normalized();
@@ -61,7 +61,7 @@ public:
         assert(m_mesh);
         
 		// m_mesh->samplePosition(sampler->next2D(), lRec.p, lRec.n, sampler->next1D());
-        SampleMeshResult res = m_mesh->sampleSurfaceUniform(sampler);
+        MeshQeuryRecord res = m_mesh->UniformSamplePoint(sampler);
         lRec.p = res.p;
         lRec.n = res.n;
         lRec.wi = (lRec.p - lRec.ref).normalized();
@@ -107,7 +107,7 @@ public:
 	}
 
     virtual PhotonRay ShootPhoton(Sampler* sampler)const{
-        const auto res = m_mesh->sampleSurfaceUniform(sampler);
+        MeshQeuryRecord res = m_mesh->UniformSamplePoint(sampler);
         Vector3f dir_local = Warp::squareToCosineHemisphere(sampler->next2D());
         Frame frame(res.n);
         Vector3f dir_world = frame.toWorld(dir_local);
