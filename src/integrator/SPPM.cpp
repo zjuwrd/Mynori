@@ -57,6 +57,7 @@ public:
     {
         
         // Initialize Pixel maps
+        // size = Image.x * Image.y
         PixelMap.reserve(scene->getCamera()->getOutputSize().y());
         for(int y=0;y<scene->getCamera()->getOutputSize().y();++y)
         {
@@ -79,7 +80,7 @@ public:
             << std::endl;
         
         
-
+        // generate sampler
         Sampler *sampler = static_cast<Sampler *>(
             NoriObjectFactory::createInstance("independent", PropertyList()));
         
@@ -94,7 +95,7 @@ public:
             uint32_t storedPhotons = 0;
             uint32_t photonEmitter = 0;
 /*-----------------------------------------------------------------------------------------------------------------------*/
-/*----------------------------------------------------------Shooting pass------------------------------------------------*/
+/*----------------------------------------------------------Photon pass--------------------------------------------------*/
 /*-----------------------------------------------------------------------------------------------------------------------*/
             std::unique_ptr<Sampler> Global_sampler=scene->getSampler()->clone();
 
@@ -108,6 +109,7 @@ public:
             //thread for shooting photons
             std::thread PhotonThread(
             [&]{
+                    // accelerate photon pass via tbb
                     tbb::task_scheduler_init init(threadCount);
                     shoot_cnt = tbb::parallel_reduce(tbb::blocked_range<size_t>(0,m_photonCount),0,
                     [&](const tbb::blocked_range<size_t>& r,int init)->int
@@ -119,11 +121,12 @@ public:
                         std::unique_ptr<Sampler> sampler = Global_sampler->newClone();
                         for(size_t photon_cnt= 0 ;photon_cnt < local_photon_cnt; )
                         {
+                            // Sample light
                             const Mesh* emissiveMesh = scene->SampleLight(sampler->next1D());
                             const Emitter* emitter = emissiveMesh->getEmitter();
-
+                            // Shooting photons with emitter
                             PhotonRay res = emitter->ShootPhoton(sampler.get());
-
+                            // photons being emitted successfully, update the photon map
                             if(res.success && !res.flux.isZero())
                             {
                                 ++local_shoot_count;
@@ -147,19 +150,16 @@ public:
                                         ++photon_cnt;
                                     }
 
+                                    // sample new directions via BSDF
                                     BSDFQueryRecord bQ(its.toLocal(-ray.d));
-
                                     Color3f fr = bsdf->sample(bQ,sampler.get());
-                                    
                                     Vector3f newdir = its.toWorld(bQ.wo);
-
+                                    // update throughput
                                     throughput *= fr;
-
                                     //Russian roullete
                                     if(depth>MinDepth)
                                     {
                                         float p = std::min(0.99f, throughput.maxCoeff());
-                                        
                                         if(sampler->next1D() > p)
                                         {
                                             break;
@@ -245,8 +245,11 @@ public:
                                     /* Renew the Pixelmsgs and Compute the incident radiance */
                                     
                                     {
-                                        auto& pp = PixelMap[y+ofs.y()][x+ofs.x()][sp];
-                                        Point2f sample = pp.pixel + sampler->next2D();
+                                        //get the pixelmsg for the pixel
+                                        auto& pmsg = PixelMap[y+ofs.y()][x+ofs.x()][sp];
+                                        //sample point inside on pixel
+                                        Point2f sample = pmsg.pixel + sampler->next2D();
+
                                         Intersection its;
                                         Color3f throughput(1.f);
                                         uint32_t depth = 0;
@@ -259,21 +262,25 @@ public:
                                             {
                                                 EmitterQueryRecord eRec(ray.o, its.p, its.shFrame.n);
                                                 Color3f power = its.mesh->getEmitter()->eval(eRec);
-                                                Image.put(pp.pixel + Point2f(0.5f), power * throughput);
+                                                Image.put(pmsg.pixel + Point2f(0.5f), power * throughput);
                                                 break;
                                             }
 
-                                            //diffuse
+                                            //diffusive surface
                                             if (its.mesh->getBSDF()->isDiffuse())
                                             {
+                                                // Query the photon map
                                                 std::vector<uint32_t> QueryRes;
-                                                m_photonMap->search(its.p, pp.radius, QueryRes);
+                                                m_photonMap->search(its.p, pmsg.radius, QueryRes);
+                                                //No photons
                                                 if (QueryRes.size() == 0)
                                                     break;
-                                                float rate = (float)(pp.p_nums + alpha * QueryRes.size()) / (pp.p_nums + QueryRes.size());
-                                                pp.p_nums += QueryRes.size() * alpha;
-                                                pp.radius = pp.radius * std::sqrt( rate);
+                                                //Compute the new radius and flux
+                                                float rate = (float)(pmsg.p_nums + alpha * QueryRes.size()) / (pmsg.p_nums + QueryRes.size());
+                                                pmsg.p_nums += QueryRes.size() * alpha;
+                                                pmsg.radius = pmsg.radius * std::sqrt( rate);
                                                 Color3f Lp(0.f);
+                                                // Compute the radiance
                                                 for (auto idx : QueryRes)
                                                 {
                                                     Photon &photon = (*m_photonMap)[idx];
@@ -283,19 +290,23 @@ public:
                                                     fr *= abscosTheta;
                                                     Lp += fr * photon.getPower();
                                                 }
-                                                pp.flux = (pp.flux + Lp) * rate * throughput;
+                                                // Update the flux message
+                                                pmsg.flux = (pmsg.flux + Lp) * rate * throughput;
                                                 break;
                                             }
 
+                                            //specular surface
                                             BSDFQueryRecord bRec(its.shFrame.toLocal(-ray.d));
+                                            // sample next direction using BSDF
                                             Color3f fr = its.mesh->getBSDF()->sample(bRec, sampler->next2D());
                                             if (fr.maxCoeff() == 0.f)
                                                 break;
-
+                                            // update throughput
                                             throughput *= fr;
                                             Ray3f ro(its.p, its.shFrame.toWorld(bRec.wo));
                                             memcpy((void*)&ray,(void*)&ro,sizeof(Ray3f));
                                             
+                                            // Russian roulette
                                             if (depth > MinDepth)
                                             {
                                                 float q = throughput.maxCoeff();
@@ -303,8 +314,9 @@ public:
                                                     break;
                                                 throughput /= q;
                                             }
+                                        
                                         }
-                                        Color3f power = pp.flux / (m_photonTotal * M_PI * pp.radius * pp.radius);
+                                        Color3f power = pmsg.flux / (m_photonTotal * M_PI * pmsg.radius * pmsg.radius);
                                         value *= power;
                                     }
                                                                         

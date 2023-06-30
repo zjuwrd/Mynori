@@ -45,7 +45,7 @@ class DebiasedPM: public Integrator
 
         virtual bool HasRenderMethod()const override{return true;}
 
-
+        // Li is never used thought, for the PM integrator has its own rendering function
         virtual Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray_) const override {
             constexpr int Mindepth = 3;
             constexpr int Maxdepth = 100;
@@ -287,7 +287,7 @@ class DebiasedPM: public Integrator
         }
 
 
-
+        // estimate function basically does the job of Li while intergating the analysis of pmf as well
         EstimateRes estimate(const uint32_t j, const float pmf, const Scene *scene, Sampler *sampler, const Ray3f &ray_) const {
             
             EstimateRes res;
@@ -309,11 +309,11 @@ class DebiasedPM: public Integrator
                     break;
                 }
 
-
+                // diffusive surface
                 if(bsdf->isDiffuse())
                 {
                     Color3f Lp0 = 0.f, Lp1=0.f, Lpk=0.f;
-
+                    // Query results for <I(0)>, <I(1)> and <I(k)>
                     std::vector<uint32_t> res0;
                     std::vector<uint32_t> res1;
                     std::vector<uint32_t> resk;
@@ -327,7 +327,6 @@ class DebiasedPM: public Integrator
                         {
                             const auto& photon = (*m_photonmap)[idx];
                             BSDFQueryRecord bQ( its.toLocal(-curRay.d), its.toLocal(-photon.getDirection()) ,EMeasure::ESolidAngle);
-
                             Color3f fr = bsdf->eval(bQ);
                             float abscosTheta = std::abs( its.toLocal(photon.getDirection()).z());
                             Lp0 += throughput *fr* abscosTheta * photon.getPower();
@@ -425,35 +424,39 @@ class DebiasedPM: public Integrator
             tbb::mutex pm_mutex;            
             std::thread PhotonThread(
             [&]{
+                    // accelerates photon pass using tbb
                     tbb::task_scheduler_init init(threadCount);
                     shoot_cnt = tbb::parallel_reduce(tbb::blocked_range<size_t>(0,PhotonCount),0,
                     [&](const tbb::blocked_range<size_t>& r,int init)->int
                     {
-                        
+                        // counter for photons to be shot each iteration
                         int local_shoot_count = 0;
                         const size_t local_photon_cnt = r.end()-r.begin();
-
+                        // generate sampler for each threads
                         std::unique_ptr<Sampler> sampler = Global_sampler->newClone();
-
+                        // shooting photons
                         for(size_t photon_cnt= 0 ;photon_cnt < local_photon_cnt; )
                         {
+                            // sample light
                             const Mesh* emissiveMesh = scene->SampleLight(sampler->next1D());
                             const Emitter* emitter = emissiveMesh->getEmitter();
-
+                            // shooting photons via emitters
                             PhotonRay res = emitter->ShootPhoton(sampler.get());
-
+                            // if photons are shot successfully
                             if(res.success && !res.flux.isZero())
                             {
+
                                 ++local_shoot_count;
                                 Ray3f ray(res.ray);
                                 Color3f flux(res.flux);
                                 Intersection its;
                                 int depth = 0;
                                 Color3f throughput=1.f;
-                            
+                                // update photon map during the ray's bouncing inside the scene
                                 while((depth<MaxDepth) && photon_cnt < local_photon_cnt && scene->rayIntersect(ray,its))
                                 {
                                     const BSDF* bsdf = its.mesh->getBSDF();
+                                    // if the hitting surface is diffusive, update the photon map
                                     if(bsdf->isDiffuse())
                                     {
 
@@ -467,12 +470,11 @@ class DebiasedPM: public Integrator
                                         ++photon_cnt;
                                     }
 
+                                    // sample new direction via BSDF
                                     BSDFQueryRecord bQ(its.toLocal(-ray.d));
-
                                     Color3f fr = bsdf->sample(bQ,sampler.get());
-                                    
                                     Vector3f newdir = its.toWorld(bQ.wo);
-
+                                    // update throughput
                                     throughput *= fr;
 
                                     //Russian roullete
