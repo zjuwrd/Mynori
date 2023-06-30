@@ -1,3 +1,8 @@
+/*
+    Stochastic Progressive photon mapping algorithm based on Nori
+    implemented by wrd
+*/
+
 #include <nori/integrator.h>
 #include <nori/scene.h>
 #include <nori/emitter.h>
@@ -41,7 +46,7 @@ public:
         m_photonCount = props.getInteger("photonCount", (1<<14) );
         m_iteration = props.getInteger("iteration", 10 );
         m_sharedRadius = props.getFloat("radius", 0.2f);
-        alpha = props.getFloat("alpha", 0.7f);
+        alpha = props.getFloat("alpha", 2.f/3.f);
         m_photonTotal = 0;
 
         record = props.getInteger("record",0);
@@ -90,7 +95,7 @@ public:
         {
             Timer timer;
             m_photonMap = std::unique_ptr<PhotonMap>(new PhotonMap());
-            m_photonMap->reserve(m_photonCount); //存每次pass的光子
+            m_photonMap->reserve(m_photonCount); 
 
             uint32_t storedPhotons = 0;
             uint32_t photonEmitter = 0;
@@ -262,7 +267,7 @@ public:
                                             {
                                                 EmitterQueryRecord eRec(ray.o, its.p, its.shFrame.n);
                                                 Color3f power = its.mesh->getEmitter()->eval(eRec);
-                                                Image.put(pmsg.pixel + Point2f(0.5f), power * throughput);
+                                                block.put(pixelSample, power * throughput);
                                                 break;
                                             }
 
@@ -291,7 +296,7 @@ public:
                                                     Lp += fr * photon.getPower();
                                                 }
                                                 // Update the flux message
-                                                pmsg.flux = (pmsg.flux + Lp) * rate * throughput;
+                                                pmsg.flux = (pmsg.flux + Lp * throughput) * rate;
                                                 break;
                                             }
 
@@ -361,7 +366,7 @@ public:
     virtual std::string toString() const override
     {
         return tfm::format(
-            "PhotonMapper[\n"
+            "StochasticProgressivePhotonMapper[\n"
             "]");
     }
 
