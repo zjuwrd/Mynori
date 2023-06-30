@@ -38,9 +38,9 @@ public:
     
     photon_sppm(const PropertyList &props)
     {
-        m_photonCount = props.getInteger("photonCount", 100000);
-        m_iteration = props.getInteger("iteration", 1 );
-        m_sharedRadius = props.getFloat("radius", 0.1f);
+        m_photonCount = props.getInteger("photonCount", (1<<14) );
+        m_iteration = props.getInteger("iteration", 10 );
+        m_sharedRadius = props.getFloat("radius", 0.2f);
         alpha = props.getFloat("alpha", 0.7f);
         m_photonTotal = 0;
 
@@ -50,11 +50,13 @@ public:
 
     virtual bool HasRenderMethod()const override{return true;}
 
-    virtual void preprocess(const Scene *scene) override
-    {
-        m_photonMap = std::unique_ptr<PhotonMap>(new PhotonMap());
-        m_photonMap->reserve(m_photonCount); 
 
+    Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray)const override{return 0.f;}
+
+    virtual void render(const Scene *scene, ImageBlock &Image) override
+    {
+        
+        // Initialize Pixel maps
         PixelMap.reserve(scene->getCamera()->getOutputSize().y());
         for(int y=0;y<scene->getCamera()->getOutputSize().y();++y)
         {
@@ -68,27 +70,19 @@ public:
                 }
             }    
         }
-    }
 
-    Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray)const override{return 0.f;}
-
-    virtual void render(const Scene *scene, ImageBlock &Image) override
-    {
+        // print out messages        
         std::cout
             << "\nsample nums: " << PixelMap.size()*PixelMap[0].size()*PixelMap[0][0].size()
             << "\niteration nums: " << m_iteration
             << "\nphoton nums per pass: " << m_photonCount
             << std::endl;
         
+        
+
         Sampler *sampler = static_cast<Sampler *>(
             NoriObjectFactory::createInstance("independent", PropertyList()));
-        std::vector<Mesh *> lights;
-        for (auto m : scene->getMeshes())
-        {
-            if (m->isEmitter())
-                lights.emplace_back(m);
-        }
-        int nLights = lights.size();
+        
         const Camera *camera = scene->getCamera();
 
         for (uint32_t i = 0; i < m_iteration; ++i)

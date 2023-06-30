@@ -114,7 +114,9 @@ static void render(Scene *scene, const std::string &filename) {
         if(scene->getIntegrator()->HasRenderMethod())
         {
             /// Use the integer's own render method if i exists. 
+            std::cout<<"rendering using Integrator"<<std::endl;
             Integrator* intergator = scene->getIntegrator();
+            std::cout<<"line 119"<<std::endl;
             intergator->render(scene,result,extra_screens);
         }
         else
