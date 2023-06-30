@@ -21,8 +21,7 @@ class PathEms : public Integrator {
         bool lastSpecular = false;
 
         for (uint32_t depth = 0;scene->rayIntersect(iterRay, its) ; ++depth) {
-            //Le taken into account only when hit the light source directly
-            //or the last bounce is a specular bounce
+            
             if ((depth == 0 || lastSpecular) && its.mesh->isEmitter()) {
                 EmitterQueryRecord eQ = EmitterQueryRecord(iterRay.o,its.p,its.shFrame.n);
                 L += throughput * its.mesh->getEmitter()->eval(eQ);
