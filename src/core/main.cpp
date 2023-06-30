@@ -125,7 +125,6 @@ static void render(Scene *scene, const std::string &filename) {
             tbb::parallel_for(range, map);
             // map(range);
             Integrator* integrator = scene->getIntegrator();
-            integrator->postprocess(scene,result);
         }
 
         /// (equivalent to the following single-threaded call)

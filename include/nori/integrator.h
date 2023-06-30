@@ -26,9 +26,6 @@ public:
 
     /// Perform an (optional) preprocess step
     virtual void preprocess(const Scene *scene) { }
-    
-    virtual void postprocess(const Scene *scene, ImageBlock &block) {}
-
     /// @brief rendering (optional)
     virtual void render(const Scene* scene,ImageBlock& image, std::vector<NoriScreen*>& screens){render(scene, image);}
     virtual void render(const Scene* scene,ImageBlock& image){}
