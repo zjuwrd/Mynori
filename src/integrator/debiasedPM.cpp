@@ -1,3 +1,7 @@
+/*
+    Debiased photon mapping algorithm based on Nori
+    implemented by wrd
+*/
 #include <nori/integrator.h>
 #include <nori/scene.h>
 #include<nori/sampler.h>
