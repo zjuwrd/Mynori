@@ -1,8 +1,13 @@
 # Nori with debiasing methods
 
-This repository is aimed for the implementation of unbiased photon mapping and unbiased photon mapping.
+Based on `Nori`, this repository is aimed for the implementation of unbiased photon mapping and unbiased photon mapping.
 
 ## 1. Building
+Before building the project, please use the following command to initialize the submodules.
+```bash
+git submodule update --init --recursive
+```
+
 The project is constructed and tested in `ubuntu22.04` and adopts `cmake` to manage project building. To build the project in linux you can use the following commands.
 ```bash
 mkdir build && cd build
