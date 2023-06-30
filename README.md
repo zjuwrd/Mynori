@@ -9,7 +9,7 @@ mkdir build && cd build
 cmake ..
 make
 ```
-To build the project in windows, you need `cmake` together with `Visual Studio 2022`.
+To build the project in `windows`, you will need `cmake` together with `Visual Studio 2022`.
 
 
 ## 2. testing
