@@ -20,10 +20,10 @@ class PathEms : public Integrator {
         Color3f L = 0.f;             
         bool lastSpecular = false;
 
-        for (uint32_t bounces = 0;scene->rayIntersect(iterRay, its) ; ++bounces) {
+        for (uint32_t depth = 0;scene->rayIntersect(iterRay, its) ; ++depth) {
             //Le taken into account only when hit the light source directly
             //or the last bounce is a specular bounce
-            if ((bounces == 0 || lastSpecular) && its.mesh->isEmitter()) {
+            if ((depth == 0 || lastSpecular) && its.mesh->isEmitter()) {
                 EmitterQueryRecord eQ = EmitterQueryRecord(iterRay.o,its.p,its.shFrame.n);
                 L += throughput * its.mesh->getEmitter()->eval(eQ);
             }
@@ -41,7 +41,7 @@ class PathEms : public Integrator {
 
             //Russian roulette
             float p = std::min(0.99f, throughput.maxCoeff());
-            if (bounces > 3) {
+            if (depth > 3) {
                 if (sampler->next1D() > p) {
                     break;
                 }
