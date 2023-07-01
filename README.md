@@ -8,7 +8,7 @@ Before building the project, please use the following command to initialize the 
 git submodule update --init --recursive
 ```
 
-The project is constructed and tested in `ubuntu22.04` and adopts `cmake` to manage project building. To build the project in linux you can use the following commands.
+The project is constructed and tested in `WSL2-ubuntu22.04` and adopts `cmake` to manage project building. To build the project in linux you can use the following commands.
 ```bash
 mkdir build && cd build
 cmake ..
@@ -18,6 +18,8 @@ To build the project in `windows`, you will need `cmake` together with `Visual S
 
 
 ## 2. testing
+The codes for photon-mapping-related algorithm locate in `./src/integrator/`. 
+
 The scene resources for debiasing-method tests locate in scenes/extra/water-caustic. To test debiased photon mapping, run the following command:
 
 ```bash
